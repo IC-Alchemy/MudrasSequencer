@@ -56,11 +56,11 @@
 // --- OLED Display ---
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-#define OLED_MOSI   9
-#define OLED_CLK   10
-#define OLED_DC    11
-#define OLED_CS    12
-#define OLED_RESET 13
+#define OLED_MOSI  10
+#define OLED_CLK   11
+#define OLED_DC    12
+#define OLED_CS    13
+#define OLED_RESET 9
 #define NOTE_LENGTH        12 // min: 1 max: 23 DO NOT EDIT BEYOND!!! 12 = 50% on 96ppqn, same as original tb303. 62.5% for triplets time signature
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 
@@ -213,11 +213,11 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
     float osc333 = osc3.Process();
     float osc444 = osc4.Process();
 
-    float out1 = (osc111 + osc222);// * current_out1;
-    float out2 = (osc333 + osc444);// * current_out2;
+    float out1 = (osc111 + osc222) * current_out1;
+    float out2 = (osc333 + osc444) * current_out2;
 
-    float sumL = out1 * 0.5f;
-    float sumR = out2 * 0.5f;
+    float sumL = out1;    // * 0.5f;
+    float sumR = out2;    // * 0.5f;
 
     int16_t intSampleL = convertSampleToInt16(sumL);
     int16_t intSampleR = convertSampleToInt16(sumR);
@@ -259,15 +259,15 @@ void initOscillators() {
 // -----------------------------------------------------------------------------
 
 void matrixEventHandler(const MatrixButtonEvent &evt) {
-    Serial.print("[MATRIX] Event! Index: "); Serial.print(evt.buttonIndex);
-    Serial.print(", Type: "); Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" : "RELEASED");
+   // Serial.print("[MATRIX] Event! Index: "); Serial.print(evt.buttonIndex);
+  //  Serial.print(", Type: "); Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" : "RELEASED");
 
     if (evt.buttonIndex < 16) { // Sequencer steps 0-15
         if (evt.type == MATRIX_BUTTON_PRESSED) {
             Serial.print("  - Toggling sequencer step: "); Serial.println(evt.buttonIndex);
             seq.toggleStep(evt.buttonIndex);
         }
-    } else if (evt.buttonIndex == 16) { // Page toggle button (example for button 16)
+    } else if (evt.buttonIndex == 31) { // Page toggle button (example for button 16)
         if (evt.type == MATRIX_BUTTON_PRESSED) {
             Serial.println("  - Toggling display page.");
             sequencer_display_page = !sequencer_display_page; // Toggle display page
@@ -322,8 +322,8 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
     // Ensure the step value wraps to the sequencer's number of steps (0-15)
     uint8_t wrapped_step = static_cast<uint8_t>(step % SEQUENCER_NUM_STEPS);
 
-    Serial.print("[uCLOCK] onStepCallback, uClock raw step: "); Serial.print(step);
-    Serial.print(", wrapped step for sequencer: "); Serial.println(wrapped_step);
+  //  Serial.print("[uCLOCK] onStepCallback, uClock raw step: "); Serial.print(step);
+  //  Serial.print(", wrapped step for sequencer: "); Serial.println(wrapped_step);
     seq.advanceStep(wrapped_step); // Pass the wrapped step to the sequencer
     drawSequencerOLED(seq.getState());
     // Serial.println("------------------------------------"); // Optional separator for logs
@@ -375,9 +375,9 @@ void setup1() {
   // Initialize Serial for debugging AFTER TinyUSB is initialized.
   Serial.begin(115200);
   // A small delay can sometimes help ensure the serial monitor is ready.
-  delay(100); 
+  delay(random(333)); 
   Serial.println("Core 1: Setup1 starting. USB and Serial initialized.");
-
+delay(random(333));
   // Seed the random number generator
   randomSeed(analogRead(A0) + millis()); // Use an unconnected analog pin and millis for better seed
   Serial.println("Core 1: Random number generator seeded.");
@@ -405,10 +405,11 @@ void setup1() {
     for (;;); // Display initialization failed, halt
   }
   display.clearDisplay();
+      display.setTextSize(1);         // Normal 1:1 pixel scale
+
   display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(1);
   display.setCursor(0, 0);
-  display.println("Sequencer OLED Ready");
+  display.println(F("Sequencer OLED Ready"));
   display.display();
   delay(1000);
   display.clearDisplay();
@@ -435,81 +436,16 @@ void setup1() {
 // -----------------------------------------------------------------------------
 
 void loop() {
-  // --- Inter-core event receive and handler dispatch ---
-  if (buttonEventFlag) {
-    uint8_t idx = buttonEventIndex;
-    uint8_t type = buttonEventType;
-    buttonEventFlag = false;
-/*
-    if (type == 1) {
-      usbMIDI.sendControlChange(idx, 1, CHANNEL);
-      trigenv1 = 1;
-      trigenv2 = 1;
-      note1 = idx;
-      note2 = idx + 12;
-      note3 = idx + 7;
-      note4 = idx + 12;
-    } else if (type == 0) {
-      trigenv1 = false;
-      trigenv2 = 0;
-    }
-  }
-*/
-  }
   // --- Audio Buffer Output ---
   audio_buffer_t *buf = take_audio_buffer(producer_pool, true);
   if (buf) {
     fill_audio_buffer(buf);
     give_audio_buffer(producer_pool, buf);
   }
-  // (Optional: delay(1); for low-priority tasks)
 }
 
 void loop1() {
-  static uint32_t lastScanMs = 0;
-  static uint32_t lastDebugMs = 0;
-  static uint32_t lastMatrixPrintMs = 0;
-  static bool prevButtonState[MATRIX_BUTTON_COUNT] = {0};
-  uint32_t nowMs = millis();
-
   usb_midi.read();
-  // uClock.update(); // Let's keep this commented out as per previous findings
-
-  // Debug message every 1000ms
-  if (nowMs - lastDebugMs >= 1000) {
-    Serial.println("Core 1: loop1 running."); // More descriptive debug message
-    lastDebugMs = nowMs;
-  }
-
-  // Scan at regular intervals (every 1ms)
-  if (nowMs - lastScanMs >= 1) {
-    lastScanMs = nowMs;
-    Matrix_scan();
-    // This calls matrixEventHandler for debounced events (buttons 0-16 for seq/page)
-
-    // Optional: Event detection for inter-core communication for buttons NOT handled by matrixEventHandler
-    // For example, if buttons 17-31 are for direct synth playing via core 0.
-    for (uint8_t idx = 0; idx < MATRIX_BUTTON_COUNT; ++idx) {
-      bool curr = Matrix_getButtonState(idx);
-      if (curr != prevButtonState[idx]) {
-        // Example: Use buttons 17-31 for the buttonEventFlag system to core 0
-        if (idx >= 17) { // Check if this button is intended for the other core
-            if (!buttonEventFlag) { // If Core 0 is ready for a new event
-                buttonEventIndex = idx;
-                buttonEventType = curr ? 1 : 0; // 1 for pressed, 0 for released
-                buttonEventFlag = true;
-            }
-        }
-        prevButtonState[idx] = curr; // Update previous state tracking for this loop
-      }
-    }
-  } // Closes if (nowMs - lastScanMs >= 1)
-
-  // Print button matrix every 100ms
-  if (nowMs - lastMatrixPrintMs >= 100) {
-   // Matrix_printState();
-    lastMatrixPrintMs = nowMs;
-  }
 } // Closes loop1()
 // -----------------------------------------------------------------------------
 // 10. END OF FILE
