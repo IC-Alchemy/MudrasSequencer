@@ -25,11 +25,11 @@ enum class StepState : uint8_t { OFF = 0, ON = 1 };
 // Represents a single step in the sequencer
 struct Step {
   StepState state; // ON/OFF
-  uint8_t note;    // MIDI note number (0-127)
+  uint8_t note;    // Scale index (e.g., 0-14) for note selection from 'scale[]' array.
   bool gate;       // Gate output state (true = gate on)
   Step()
-      : state(StepState::OFF), note(60), gate(false) {
-  } // Default: OFF, Middle C, gate off
+      : state(StepState::ON), note(0), gate(true) {
+  } // Default: OFF, first note in scale (index 0), gate off
 };
 
 // Playhead position (0..SEQUENCER_NUM_STEPS-1)

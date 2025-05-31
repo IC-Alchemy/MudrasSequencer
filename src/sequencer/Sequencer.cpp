@@ -15,11 +15,14 @@
 // Access global note1 and scale[] from main .ino
 extern volatile int note1;
 extern int scale[];
+extern volatile bool trigenv1; // Used for triggering envelope
+
+// Define a base MIDI note for the scale. This could be configurable.
+const uint8_t MIDI_BASE_NOTE = 36; // Example: C1 (MIDI note 36)
 
 // ==============================
 //  Sequencer Implementation
 // ==============================
-
 namespace {
     // Helper: Validate a MIDI note value
     inline bool isValidMidiNote(uint8_t note) {
@@ -31,6 +34,7 @@ namespace {
         return state == StepState::ON || state == StepState::OFF;
     }
 }
+
 /**
  * @brief Initialize the sequencer to a known good state.
  *
@@ -57,13 +61,19 @@ void Sequencer::resetState() {
 }
 
 /**
- * @brief Initialize all steps to default values (gate=true, note=48).
+ * @brief Initialize all steps to default values.
+ * Note is initialized to a random scale index.
  */
 void Sequencer::initializeSteps() {
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
-        state.steps[i] = Step();
-        state.steps[i].gate = true;
-        state.steps[i].note = 48;
+        state.steps[i] = Step(); // Resets to Step defaults (OFF, note index 0, gate false)
+        // By default, Step() constructor sets state to OFF.
+        // To make notes play, steps must be toggled ON via toggleStep() or forced ON here for testing.
+        state.steps[i].gate = (i % 2 == 0);
+        // Assign a random scale index (0-14, assuming scale array is large enough)
+        state.steps[i].note = random(0, 15);
+        // Example for testing - REMOVE LATER:
+        // if (i == 0) state.steps[i].state = StepState::ON; 
     }
 }
 
@@ -78,7 +88,10 @@ bool Sequencer::validateState() const {
     }
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
         const Step& s = state.steps[i];
-        if (!isValidMidiNote(s.note) || !isValidStepState(s.state)) {
+        // s.note is now a scale index. Validation of index range should ideally consider
+        // the actual size of the 'scale' array. For now, we rely on initialization
+        // and setStepNote to manage this. We only check StepState here.
+        if (!isValidStepState(s.state)) {
             return false;
         }
     }
@@ -96,7 +109,7 @@ bool Sequencer::hasError() const {
 /**
  * @brief Default constructor. Initializes sequencer state to default values.
  */
-Sequencer::Sequencer() : state() {
+Sequencer::Sequencer() : state(), errorFlag(false), lastNote(-1) {
     // All steps default to OFF, note 60, gate false (see Step constructor)
     // Playhead at 0, running = false
 }
@@ -126,97 +139,120 @@ void Sequencer::reset() {
 }
 
 /**
- * @brief Advance the playhead to the next step (wraps at end).
- *        If the current step is ON, triggers gate and MIDI note.
- */
-/**
- * @brief Advance the playhead to the next step (wraps at end) and handle note/gate logic.
+ * @brief Processes the sequencer logic for the given step provided by uClock.
  *
  * Core sequencer step-advance logic:
- * - On each clock tick, advance the sequencer playhead.
+ * - Uses the `current_uclock_step` to set the internal playhead.
  * - Track the last played note.
  * - Always send noteOff for the last note before sending noteOn for the new note.
  * - If the new step is ON, send noteOn for the current note, set oscillator frequency, and trigger the envelope.
  * - If the new step is OFF, send noteOff for the last note (if any) and release the envelope.
  * - Handle repeated notes by sending noteOff then noteOn, even if the note is the same.
  * - Modular, robust, and well-documented.
+ * @param current_uclock_step The current step number (0-15) provided by uClock.
  */
-void Sequencer::advanceStep() {
-    if (!state.running)
+void Sequencer::advanceStep(uint8_t current_uclock_step) {
+    // Serial.print("advanceStep called with uClock step: "); Serial.println(current_uclock_step);
+    if (!state.running) {
+        // Serial.println(" - Sequencer not running.");
         return;
-
-    // Store previous note for noteOff handling
-    int8_t prevNote = lastNote;
-
-    // Advance playhead, wrap at end
-    state.playhead = (state.playhead + 1) % SEQUENCER_NUM_STEPS;
-
-    // Update global oscillator note to match current step in scale
-    note1 = scale[state.playhead];
-
-    // Get the new current step
-    Step &current = state.steps[state.playhead];
-
-    // Always send noteOff for the last note before noteOn for the new note
-    if (prevNote >= 0) {
-        // Replace usb_midi with your MIDI interface if needed
-        usb_midi.sendNoteOff(prevNote, 0, 1);
     }
 
-    if (current.state == StepState::ON) {
-        current.gate = true;
+    // Validate the incoming step from uClock
+    if (current_uclock_step >= SEQUENCER_NUM_STEPS) {
+        // Serial.print(" - WARN: uClock step out of bounds: "); Serial.println(current_uclock_step);
+        current_uclock_step = 0; // Or handle error more gracefully
+    }
 
-        // Send noteOn for the current note (even if same as last)
-        usb_midi.sendNoteOn(current.note, 100, 1);
+    // --- Previous Note Handling ---
+    // Send Note Off for the previously sounding MIDI note.
+    if (lastNote >= 0) {
+        usb_midi.sendNoteOff(lastNote, 0, 1); // Channel 1, velocity 0
+    }
 
-        // Set oscillator frequency for the new note (stub, replace with actual call)
-        // setOscillatorFrequency(current.note); // stub call commented out
+    // --- Set Playhead based on uClock's current step ---
+    // The playhead is now directly set by the step provided by uClock.
+    state.playhead = current_uclock_step;
+    Step &currentStep = state.steps[state.playhead]; // Get the step uClock says is current
 
-        // Trigger the envelope (stub, replace with actual call)
-        // triggerEnvelope(); // stub call commented out
+    // Serial.print("  - Playhead set to: "); Serial.print(state.playhead);
+    // Serial.print(" - Step State: "); Serial.println(currentStep.state == StepState::ON ? "ON" : "OFF");
 
-        // Set trigenv1 HIGH for gate duration (legacy, if needed)
-        trigenv1 = true;
+    // --- Current Step Processing ---
+    if (currentStep.state == StepState::ON) {
+        // Serial.println("    - Step IS ON.");
+        currentStep.gate = true; // Gate is conceptually high for an ON step
 
-        // Update lastNote to the current note
-        lastNote = static_cast<int8_t>(current.note);
-    } else {
-        // Step is OFF: ensure gate is low, release envelope, and clear lastNote
-        current.gate = false;
+        // Calculate the actual MIDI note for this step
+        // currentStep.note is a scale index (e.g., 0-14)
+        uint8_t scaleIndex = currentStep.note;
+        
+        // Validate scaleIndex. Since initializeSteps uses random(0,15),
+        // scaleIndex will be 0-14. A check against the actual size of `scale[]`
+        // or a defined MAX_SCALE_INDEX would be more robust if setStepNote could set higher values.
+        if (scaleIndex >= 15) { // Max index from random(0,15) is 14. Safeguard.
+            // Serial.print("    - WARN: scaleIndex out of expected range (0-14), resetting to 0. Was: "); Serial.println(scaleIndex);
+            scaleIndex = 0; // Default to a safe index if somehow out of expected range.
+        }
+        // Ensure scaleIndex is within bounds of the actual scale array if known,
+        // or rely on `random()` and `setStepNote()` to set valid indices.
+        // uint8_t actualMidiNote = MIDI_BASE_NOTE + scale[scaleIndex]; // Assuming scale contains offsets
+        // Serial.print("      - Scale Index: "); Serial.println(scaleIndex);
 
-        // Release the envelope (stub, replace with actual call)
-        // releaseEnvelope(); // stub call commented out
+        // Assuming scale[] contains offsets from MIDI_BASE_NOTE
+        // If scale[] itself contains absolute MIDI notes, then actualMidiNote = scale[scaleIndex];
+        uint8_t actualMidiNote = MIDI_BASE_NOTE + scale[scaleIndex];
+        // Serial.print("      - Calculated MIDI Note: "); Serial.println(actualMidiNote);
 
-        // Set trigenv1 LOW (legacy, if needed)
-        trigenv1 = false;
+        // Send MIDI Note On
+        usb_midi.sendNoteOn(actualMidiNote, 100, 1); // Velocity 100, Channel 1
+        // Serial.println("      - MIDI NoteOn SENT.");
 
-        // No note is playing
-        lastNote = -1;
+        // Update global synth parameter (note1) with the absolute MIDI note
+        note1 = actualMidiNote;
+        // Serial.print("      - Global note1 set to: "); Serial.println(note1);
+
+        triggerEnvelope();
+        // Serial.println("      - Envelope TRIGGERED.");
+
+        // Store the actual MIDI note that was just turned on
+        lastNote = actualMidiNote;
+    } else { // Current step is OFF
+        // Serial.println("    - Step IS OFF.");
+        currentStep.gate = false; // Gate is low
+        releaseEnvelope();
+        // No new note is played, lastNote remains from previous NoteOff or is -1
+        lastNote = -1; // Explicitly no MIDI note is sounding from the sequencer
     }
 }
 
 /**
- * @brief Set the oscillator frequency for the given MIDI note.
- * Replace this stub with your actual oscillator control logic.
- 
-void Sequencer::setOscillatorFrequency(uint8_t midiNote) {
-    // Example: oscillator.setFrequency(midiNoteToFrequency(midiNote));
+ * @brief Convert absolute MIDI note to the offset scheme used by the audio thread.
+ *
+ */ 
+void Sequencer::setOscillatorFrequency(uint8_t midiNote)
+{
+        // This function directly sets the global note1.
+        // If the sequencer is running, advanceStep() will likely override this.
+        note1 = midiNote ;
 }
 /*
 /**
  * @brief Trigger the envelope for noteOn.
  * Replace this stub with your actual envelope control logic.
- 
+ */
 void Sequencer::triggerEnvelope() {
-    // Example: envelope.trigger();
+    trigenv1 = true;
+    trigenv2 = true;
 }
 
 /**
  * @brief Release the envelope for noteOff.
  * Replace this stub with your actual envelope control logic.
- 
+ */
 void Sequencer::releaseEnvelope() {
-    // Example: envelope.release();
+    trigenv1 = false;
+    trigenv2 = false;
 }
 
 /**
@@ -232,13 +268,16 @@ void Sequencer::toggleStep(uint8_t stepIdx) {
 
 /**
  * @brief Set the MIDI note for a specific step.
+ * The 'note' parameter is treated as a scale index.
  * @param stepIdx Index of the step.
- * @param note MIDI note value (0-127).
+ * @param noteIndex Scale index for the step.
  */
-void Sequencer::setStepNote(uint8_t stepIdx, uint8_t note) {
+void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
     if (stepIdx >= SEQUENCER_NUM_STEPS)
         return;
-    state.steps[stepIdx].note = note;
+    // Add validation for noteIndex if MAX_SCALE_INDEX is known
+    // e.g., if (noteIndex >= MAX_SCALE_INDEX) noteIndex = 0;
+    state.steps[stepIdx].note = noteIndex;
 }
 
 /**

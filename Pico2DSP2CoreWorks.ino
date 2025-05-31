@@ -200,10 +200,10 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
   }
 
   for (int i = 0; i < N; ++i) {
-    osc1.SetFreq(daisysp::mtof(note1 + 36));
-    osc2.SetFreq(daisysp::mtof(note2 + 36));
-    osc3.SetFreq(daisysp::mtof(note3 + 36));
-    osc4.SetFreq(daisysp::mtof(note2 - 12));
+    osc1.SetFreq(daisysp::mtof(note1 ));
+    osc2.SetFreq(daisysp::mtof(note1 )*1.003f);
+    osc3.SetFreq(daisysp::mtof(note1 ));
+    osc4.SetFreq(daisysp::mtof(note1 ));
 
     float current_out1 = env1.Process(trigenv1);
     float current_out2 = env2.Process(trigenv2);
@@ -213,8 +213,8 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
     float osc333 = osc3.Process();
     float osc444 = osc4.Process();
 
-    float out1 = (osc111 + osc222) * current_out1;
-    float out2 = (osc333 + osc444) * current_out2;
+    float out1 = (osc111 + osc222);// * current_out1;
+    float out2 = (osc333 + osc444);// * current_out2;
 
     float sumL = out1 * 0.5f;
     float sumR = out2 * 0.5f;
@@ -226,8 +226,6 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
     out[2 * i + 1] = intSampleR;
   }
   buffer->sample_count = N;
-  // Set up page toggle button (e.g., pin 2)
-  pinMode(2, INPUT_PULLUP); // (Redundant, but kept for compatibility)
 }
 
 // -----------------------------------------------------------------------------
@@ -236,26 +234,42 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
 void initOscillators() {
   osc1.Init(SAMPLE_RATE); osc2.Init(SAMPLE_RATE); osc3.Init(SAMPLE_RATE); osc4.Init(SAMPLE_RATE);
-  osc5.Init(SAMPLE_RATE); osc6.Init(SAMPLE_RATE); osc7.Init(SAMPLE_RATE); osc8.Init(SAMPLE_RATE);
+ // osc5.Init(SAMPLE_RATE); //osc6.Init(SAMPLE_RATE); //osc7.Init(SAMPLE_RATE); //osc8.Init(SAMPLE_RATE);
   env1.Init(SAMPLE_RATE); env2.Init(SAMPLE_RATE);
 
   env1.SetReleaseTime(.061f);
-  env1.SetAttackTime(0.006f);
+  env1.SetAttackTime(0.0016f);
   env2.SetAttackTime(0.001f);
-  env1.SetDecayTime(0.1f);
-  env2.SetDecayTime(0.1f);
+  env1.SetDecayTime(0.071f);
+  env2.SetDecayTime(0.071f);
   env1.SetSustainLevel(0.4f);
   env2.SetSustainLevel(0.4f);
-  env2.SetReleaseTime(0.07f);
+  env2.SetReleaseTime(0.05f);
 
   // Set initial waveform for all oscillators
   osc1.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
   osc2.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
   osc3.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
   osc4.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
-  osc5.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
+//  osc5.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
 }
 
+// -----------------------------------------------------------------------------
+// MATRIX EVENT HANDLER
+// -----------------------------------------------------------------------------
+
+void matrixEventHandler(const MatrixButtonEvent &evt) {
+    if (evt.buttonIndex < 16) { // Sequencer steps 0-15
+        if (evt.type == MATRIX_BUTTON_PRESSED) {
+            seq.toggleStep(evt.buttonIndex);
+        }
+    } else if (evt.buttonIndex == 16) { // Page toggle button (example for button 16)
+        if (evt.type == MATRIX_BUTTON_PRESSED) {
+            sequencer_display_page = !sequencer_display_page; // Toggle display page
+        }
+    }
+    drawSequencerOLED(seq.getState()); // Update display on any relevant matrix event
+}
 // -----------------------------------------------------------------------------
 // 7. MIDI & CLOCK HANDLERS
 // -----------------------------------------------------------------------------
@@ -282,72 +296,25 @@ void onSync24Callback(uint32_t tick) {
 }
 
 void onClockStart() {
-  usb_midi.sendRealTime(midi::Start);
+  // Serial.println("Core 1: uClock onClockStart() called."); // Temporarily remove for performance
+  usb_midi.sendRealTime(midi::Start); // MIDI Start message
+  seq.start();
 }
 
-/**
- * Callback invoked on each sequencer step event.
- * Advances the sequencer and updates the OLED display if the state changes.
- */
+void onClockStop() {
+  // Serial.println("Core 1: uClock onClockStop() called."); // Temporarily remove for performance
+  usb_midi.sendRealTime(midi::Stop); // MIDI Stop message
+  seq.stop();
+}
+
 /**
  * Monophonic step callback: handles rest, note length, and MIDI for a single note.
  * Preserves rests, glide (if implemented), note length, and MIDI handling.
  */
-void onStepCallback(uint32_t tick) {
-    uint16_t step = tick % SEQUENCER_NUM_STEPS;
-    uint16_t length = NOTE_LENGTH;
-    const auto& currentStep = seq.getStep(step);
-
-    // Handle rest: do nothing if this step is a rest
-    if (currentStep.state == StepState::OFF) {
-        // Optionally send note-off if a note was playing
-        if (seq.getLastNote() >= 0) {
-            usb_midi.sendNoteOff(seq.getLastNote(), 0, 1);
-            seq.setLastNote(-1);
-        }
-        return;
-    }
-
-    // Glide and note length calculation (look ahead for glide)
-    for (uint16_t i = 1; i < SEQUENCER_NUM_STEPS; ++i) {
-        uint16_t nextStep = (step + i) % SEQUENCER_NUM_STEPS;
-        const auto& s = seq.getStep(nextStep);
-        // If you add a 'glide' property to Step, check it here:
-        // if (s.glide && s.state == StepState::ON) {
-        if (s.state == StepState::ON) {
-            // If you want to support glide, add logic here
-            length = NOTE_LENGTH + (i * 24);
-            break;
-        }
-    }
-
-    // Monophonic: always send note-off for the last note before note-on
-    if (seq.getLastNote() >= 0) {
-        usb_midi.sendNoteOff(seq.getLastNote(), 0, 1);
-    }
-
-    // Send note-on for the current note
-    usb_midi.sendNoteOn(currentStep.note, 100, 1); // Use accent velocity if needed
-    seq.setLastNote(currentStep.note);
-
-    // Set oscillator frequency and trigger envelope as in your Sequencer::advanceStep()
-   // setOscillatorFrequency(currentStep.note);
-    //triggerEnvelope();
-
-    // TODO: Start a timer for note length to send note-off after 'length'
-    // This may require integration with your main loop or a timer interrupt.
-
-    // OLED update (optional, as before)
-    auto state = seq.getState();
-   // static decltype(state) lastState;
-    //if (state != lastState) {
-        drawSequencerOLED(state);
-       // lastState = state;
-  //  }
-}
-void onClockStop() {
-  seq.stop();
-  usb_midi.sendRealTime(midi::Stop);
+void onStepCallback(uint32_t step) { // uClock provides the current step number
+    seq.advanceStep(static_cast<uint8_t>(step)); // Pass the current step to the sequencer
+    drawSequencerOLED(seq.getState());
+    // Serial.print("Core 1: uClock onStepCallback() called, step: "); Serial.println(step);
 }
 
 // -----------------------------------------------------------------------------
@@ -358,19 +325,6 @@ void setup() {
   // --- Synth & Envelope ---
   initOscillators();
 
-  // --- OLED Display ---
-  if (!display.begin(SSD1306_SWITCHCAPVCC)) {
-    for (;;); // Display initialization failed, halt
-  }
-  display.clearDisplay();
-  display.setTextColor(SSD1306_WHITE);
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.println("Sequencer OLED Ready");
-  display.display();
-  delay(1000);
-  display.clearDisplay();
-  display.display();
 
   // --- I2S Output Initialization ---
   static audio_format_t my_audio_format = {
@@ -398,24 +352,19 @@ void setup() {
  
 
   // --- Initial OLED Sequencer State ---
-    drawSequencerOLED(seq.getState());
 
-}
-void matrixEventHandler(const MatrixButtonEvent &evt) {
-    if (evt.type == MATRIX_BUTTON_PRESSED && evt.buttonIndex < 16) {
-        seq.toggleStep(evt.buttonIndex);
-        // Optionally, update the OLED display immediately:
-        drawSequencerOLED(seq.getState());
-    }
 }
 void setup1() {
-  Serial.begin(9600);
-  delay(55);
-  Serial.println("FastRead.ino: Setup starting...");
-
 #if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
+  // Initialize TinyUSB stack. This should be done once, early, on the core handling USB.
   TinyUSB_Device_Init(0);
 #endif
+
+  // Initialize Serial for debugging AFTER TinyUSB is initialized.
+  Serial.begin(115200);
+  // A small delay can sometimes help ensure the serial monitor is ready.
+  delay(100); 
+  Serial.println("Core 1: Setup1 starting. USB and Serial initialized.");
 
   usb_midi.begin(MIDI_CHANNEL_OMNI);
 
@@ -432,28 +381,35 @@ void setup1() {
   uClock.setTempo(126);
   uClock.start();
 
+  // --- OLED Display ---
+  if (!display.begin(SSD1306_SWITCHCAPVCC)) {
+    for (;;); // Display initialization failed, halt
+  }
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.println("Sequencer OLED Ready");
+  display.display();
+  delay(1000);
+  display.clearDisplay();
+  display.display();
   // Touch sensor
   if (!touchSensor.begin()) {
-    Serial.println("ERROR: MPR121 not found. Check wiring and I2C address!");
+    Serial.println("Core 1: ERROR - MPR121 not found. Check wiring and I2C address!");
     while (1) { delay(55); }
   } else {
-    Serial.println("MPR121 initialized successfully.");
+    Serial.println("Core 1: MPR121 initialized successfully.");
   }
 
   Matrix_init(&touchSensor);
+  Matrix_setEventHandler(matrixEventHandler); // Register the event handler
+
   pinMode(PIN_TOUCH_IRQ, INPUT);
+  drawSequencerOLED(seq.getState());
 
-  Serial.println("Setup complete.");
-// --- Matrix to Sequencer Step Toggling Integration ---
-// This handler toggles sequencer steps 0-15 when the corresponding matrix button is pressed.
-
-
-// Register the handler after Matrix_init in setup1:
-struct MatrixEventHandlerRegistrar {
-    MatrixEventHandlerRegistrar() {
-        Matrix_setEventHandler(matrixEventHandler);
-    }
-} _matrixEventHandlerRegistrar;
+  Serial.println("Core 1: Setup1 complete.");
+  seq.init(); // Initialize sequencer using its public init method
 }
 
 // -----------------------------------------------------------------------------
@@ -499,10 +455,11 @@ void loop1() {
   uint32_t nowMs = millis();
 
   usb_midi.read();
+  // uClock.update(); // Let's keep this commented out as per previous findings
 
   // Debug message every 1000ms
   if (nowMs - lastDebugMs >= 1000) {
-    Serial.println("Scanning...");
+    Serial.println("Core 1: loop1 running."); // More descriptive debug message
     lastDebugMs = nowMs;
   }
 
@@ -510,24 +467,32 @@ void loop1() {
   if (nowMs - lastScanMs >= 1) {
     lastScanMs = nowMs;
     Matrix_scan();
+    // This calls matrixEventHandler for debounced events (buttons 0-16 for seq/page)
 
-    // Event detection and inter-core communication
+    // Optional: Event detection for inter-core communication for buttons NOT handled by matrixEventHandler
+    // For example, if buttons 17-31 are for direct synth playing via core 0.
     for (uint8_t idx = 0; idx < MATRIX_BUTTON_COUNT; ++idx) {
       bool curr = Matrix_getButtonState(idx);
       if (curr != prevButtonState[idx]) {
-        if (!buttonEventFlag) {
-       
+        // Example: Use buttons 17-31 for the buttonEventFlag system to core 0
+        if (idx >= 17) { // Check if this button is intended for the other core
+            if (!buttonEventFlag) { // If Core 0 is ready for a new event
+                buttonEventIndex = idx;
+                buttonEventType = curr ? 1 : 0; // 1 for pressed, 0 for released
+                buttonEventFlag = true;
+            }
+        }
+        prevButtonState[idx] = curr; // Update previous state tracking for this loop
       }
     }
-  }
+  } // Closes if (nowMs - lastScanMs >= 1)
 
   // Print button matrix every 100ms
   if (nowMs - lastMatrixPrintMs >= 100) {
-    Matrix_printState();
+   // Matrix_printState();
     lastMatrixPrintMs = nowMs;
   }
-}}
-
+} // Closes loop1()
 // -----------------------------------------------------------------------------
 // 10. END OF FILE
 // -----------------------------------------------------------------------------

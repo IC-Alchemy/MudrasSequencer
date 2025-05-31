@@ -53,8 +53,11 @@ public:
   void stop();
   void reset();
 
-  // Advance playhead to next step (wraps at end)
-  void advanceStep();
+  /**
+   * @brief Processes the sequencer logic for the given step.
+   * @param current_uclock_step The current step number (0-15) provided by uClock.
+   */
+  void advanceStep(uint8_t current_uclock_step);
 
   // Toggle step ON/OFF
   void toggleStep(uint8_t stepIdx);
@@ -62,6 +65,8 @@ public:
   // Set note for a step
   void setStepNote(uint8_t stepIdx, uint8_t note);
 
+// Convert absolute MIDI note (0-127) to the semitone-offset scheme used by the audio thread
+    void setOscillatorFrequency(uint8_t midiNote);
   // Query step and playhead state
   const Step &getStep(uint8_t stepIdx) const;
   uint8_t getPlayhead() const;
@@ -72,6 +77,8 @@ public:
     void setLastNote(int8_t note);
 
 const SequencerState& getState() const;
+void triggerEnvelope();
+    void releaseEnvelope();
 
 private:
     void resetState();
@@ -82,7 +89,7 @@ private:
 
     /**
      * @brief Tracks the last played MIDI note for proper noteOff handling.
-     * -1 means no note is currently playing.
+   * Stores the actual MIDI note value sent. -1 means no note is currently playing.
      */
     int8_t lastNote = -1;
 };
