@@ -159,21 +159,21 @@ void Sequencer::advanceStep() {
 
     // Always send noteOff for the last note before noteOn for the new note
     if (prevNote >= 0) {
-        // Replace MIDI_USB with your MIDI interface if needed
-        MIDI_USB.sendNoteOff(prevNote, 0, 1);
+        // Replace usb_midi with your MIDI interface if needed
+        usb_midi.sendNoteOff(prevNote, 0, 1);
     }
 
     if (current.state == StepState::ON) {
         current.gate = true;
 
         // Send noteOn for the current note (even if same as last)
-        MIDI_USB.sendNoteOn(current.note, 100, 1);
+        usb_midi.sendNoteOn(current.note, 100, 1);
 
         // Set oscillator frequency for the new note (stub, replace with actual call)
-        setOscillatorFrequency(current.note);
+        // setOscillatorFrequency(current.note); // stub call commented out
 
         // Trigger the envelope (stub, replace with actual call)
-        triggerEnvelope();
+        // triggerEnvelope(); // stub call commented out
 
         // Set trigenv1 HIGH for gate duration (legacy, if needed)
         trigenv1 = true;
@@ -185,7 +185,7 @@ void Sequencer::advanceStep() {
         current.gate = false;
 
         // Release the envelope (stub, replace with actual call)
-        releaseEnvelope();
+        // releaseEnvelope(); // stub call commented out
 
         // Set trigenv1 LOW (legacy, if needed)
         trigenv1 = false;
@@ -198,15 +198,15 @@ void Sequencer::advanceStep() {
 /**
  * @brief Set the oscillator frequency for the given MIDI note.
  * Replace this stub with your actual oscillator control logic.
- */
+ 
 void Sequencer::setOscillatorFrequency(uint8_t midiNote) {
     // Example: oscillator.setFrequency(midiNoteToFrequency(midiNote));
 }
-
+/*
 /**
  * @brief Trigger the envelope for noteOn.
  * Replace this stub with your actual envelope control logic.
- */
+ 
 void Sequencer::triggerEnvelope() {
     // Example: envelope.trigger();
 }
@@ -214,7 +214,7 @@ void Sequencer::triggerEnvelope() {
 /**
  * @brief Release the envelope for noteOff.
  * Replace this stub with your actual envelope control logic.
- */
+ 
 void Sequencer::releaseEnvelope() {
     // Example: envelope.release();
 }

@@ -69,8 +69,9 @@ Sequencer seq;
 volatile uint8_t sequencer_display_page = 0; // 0 = Note Page, 1 = Gate Page
 
 // --- MIDI & Clock ---
-Adafruit_USBD_MIDI usb_midi;
-MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, usb_midi, MIDI_USB);
+Adafruit_USBD_MIDI raw_usb_midi;
+midi::SerialMIDI<Adafruit_USBD_MIDI> serial_usb_midi(raw_usb_midi);
+midi::MidiInterface<midi::SerialMIDI<Adafruit_USBD_MIDI>> usb_midi(serial_usb_midi);
 uint8_t bpm_blink_timer = 1;
 
 // --- Touch Matrix ---
@@ -276,12 +277,12 @@ void handle_bpm_led(uint32_t tick) {
 }
 
 void onSync24Callback(uint32_t tick) {
-  MIDI_USB.sendRealTime(midi::Clock);
+  usb_midi.sendRealTime(midi::Clock);
   handle_bpm_led(tick);
 }
 
 void onClockStart() {
-  MIDI_USB.sendRealTime(midi::Start);
+  usb_midi.sendRealTime(midi::Start);
 }
 
 /**
@@ -301,7 +302,7 @@ void onStepCallback(uint32_t tick) {
     if (currentStep.state == StepState::OFF) {
         // Optionally send note-off if a note was playing
         if (seq.getLastNote() >= 0) {
-            MIDI_USB.sendNoteOff(seq.getLastNote(), 0, 1);
+            usb_midi.sendNoteOff(seq.getLastNote(), 0, 1);
             seq.setLastNote(-1);
         }
         return;
@@ -322,11 +323,11 @@ void onStepCallback(uint32_t tick) {
 
     // Monophonic: always send note-off for the last note before note-on
     if (seq.getLastNote() >= 0) {
-        MIDI_USB.sendNoteOff(seq.getLastNote(), 0, 1);
+        usb_midi.sendNoteOff(seq.getLastNote(), 0, 1);
     }
 
     // Send note-on for the current note
-    MIDI_USB.sendNoteOn(currentStep.note, 100, 1); // Use accent velocity if needed
+    usb_midi.sendNoteOn(currentStep.note, 100, 1); // Use accent velocity if needed
     seq.setLastNote(currentStep.note);
 
     // Set oscillator frequency and trigger envelope as in your Sequencer::advanceStep()
@@ -346,7 +347,7 @@ void onStepCallback(uint32_t tick) {
 }
 void onClockStop() {
   seq.stop();
-  MIDI_USB.sendRealTime(midi::Stop);
+  usb_midi.sendRealTime(midi::Stop);
 }
 
 // -----------------------------------------------------------------------------
@@ -394,8 +395,7 @@ void setup() {
   audio_i2s_set_enabled(true);
 
   // --- Initial Envelope Triggers ---
-  trigenv1 = 1;
-  trigenv2 = 0;
+ 
 
   // --- Initial OLED Sequencer State ---
     drawSequencerOLED(seq.getState());
@@ -417,7 +417,7 @@ void setup1() {
   TinyUSB_Device_Init(0);
 #endif
 
-  MIDI_USB.begin(MIDI_CHANNEL_OMNI);
+  usb_midi.begin(MIDI_CHANNEL_OMNI);
 
   // Initialize builtin led for clock timer blinking
   // (Implement initBlinkLed() as needed)
@@ -498,7 +498,7 @@ void loop1() {
   static bool prevButtonState[MATRIX_BUTTON_COUNT] = {0};
   uint32_t nowMs = millis();
 
-  MIDI_USB.read();
+  usb_midi.read();
 
   // Debug message every 1000ms
   if (nowMs - lastDebugMs >= 1000) {

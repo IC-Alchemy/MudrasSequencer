@@ -20,6 +20,12 @@
 #define SEQUENCER_H
 
 #include "SequencerDefs.h"
+extern volatile bool trigenv1;
+extern volatile bool trigenv2;
+#include <Adafruit_TinyUSB.h>
+#include <MIDI.h>
+
+extern midi::MidiInterface<midi::SerialMIDI<Adafruit_USBD_MIDI>> usb_midi;
 
 class Sequencer {
 public:
@@ -69,6 +75,8 @@ const SequencerState& getState() const;
 
 private:
     void resetState();
+    void initializeSteps();
+    bool validateState() const;
     SequencerState state;
     bool errorFlag = false;
 
