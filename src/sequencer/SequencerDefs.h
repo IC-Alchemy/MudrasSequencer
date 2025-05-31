@@ -19,6 +19,9 @@
 // Number of steps per sequencer (fixed at 16 for this project)
 constexpr uint8_t SEQUENCER_NUM_STEPS = 16;
 
+// Size of the global 'scale' array defined in the main .ino file
+constexpr uint8_t SCALE_ARRAY_SIZE = 40;
+
 // Step state: ON = step will trigger, OFF = step is skipped
 enum class StepState : uint8_t { OFF = 0, ON = 1 };
 
@@ -28,8 +31,8 @@ struct Step {
   uint8_t note;    // Scale index (e.g., 0-14) for note selection from 'scale[]' array.
   bool gate;       // Gate output state (true = gate on)
   Step()
-      : state(StepState::ON), note(0), gate(true) {
-  } // Default: OFF, first note in scale (index 0), gate off
+      : state(StepState::OFF), note(0), gate(false) {
+  } // Default: Step is OFF, note index 0, gate is false.
 };
 
 // Playhead position (0..SEQUENCER_NUM_STEPS-1)

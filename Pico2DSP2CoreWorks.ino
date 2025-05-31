@@ -86,8 +86,8 @@ volatile uint8_t buttonEventIndex = 0;
 volatile uint8_t buttonEventType = 0;
 
 // --- Scale Table ---
-int scale[] = {
-  0,2,4,5,7,9,10,12,14,16,17,19,21,22,24,26,28,29,31,33,34,36,38,40,41,43,46,46,48,50,52,53,55,57,58,60,60,60,60,60,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48,48
+int scale[40] = {
+  0,2,4,5,7,9,10,12,14,16,17,19,21,22,24,26,28,29,31,33,34,36,38,40,41,43,46,46,48,50,52,53,55,57,58,60,60,60,60,60
 };
 
 // --- Audio & Synth ---
@@ -259,15 +259,22 @@ void initOscillators() {
 // -----------------------------------------------------------------------------
 
 void matrixEventHandler(const MatrixButtonEvent &evt) {
+    Serial.print("[MATRIX] Event! Index: "); Serial.print(evt.buttonIndex);
+    Serial.print(", Type: "); Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" : "RELEASED");
+
     if (evt.buttonIndex < 16) { // Sequencer steps 0-15
         if (evt.type == MATRIX_BUTTON_PRESSED) {
+            Serial.print("  - Toggling sequencer step: "); Serial.println(evt.buttonIndex);
             seq.toggleStep(evt.buttonIndex);
         }
     } else if (evt.buttonIndex == 16) { // Page toggle button (example for button 16)
         if (evt.type == MATRIX_BUTTON_PRESSED) {
+            Serial.println("  - Toggling display page.");
             sequencer_display_page = !sequencer_display_page; // Toggle display page
         }
     }
+    // Consider only drawing if a relevant button for the sequencer/display was pressed.
+    // For now, drawing on any matrix event is fine for debugging.
     drawSequencerOLED(seq.getState()); // Update display on any relevant matrix event
 }
 // -----------------------------------------------------------------------------
@@ -296,13 +303,13 @@ void onSync24Callback(uint32_t tick) {
 }
 
 void onClockStart() {
-  // Serial.println("Core 1: uClock onClockStart() called."); // Temporarily remove for performance
+  Serial.println("[uCLOCK] onClockStart() called.");
   usb_midi.sendRealTime(midi::Start); // MIDI Start message
   seq.start();
 }
 
 void onClockStop() {
-  // Serial.println("Core 1: uClock onClockStop() called."); // Temporarily remove for performance
+  Serial.println("[uCLOCK] onClockStop() called.");
   usb_midi.sendRealTime(midi::Stop); // MIDI Stop message
   seq.stop();
 }
@@ -312,9 +319,14 @@ void onClockStop() {
  * Preserves rests, glide (if implemented), note length, and MIDI handling.
  */
 void onStepCallback(uint32_t step) { // uClock provides the current step number
-    seq.advanceStep(static_cast<uint8_t>(step)); // Pass the current step to the sequencer
+    // Ensure the step value wraps to the sequencer's number of steps (0-15)
+    uint8_t wrapped_step = static_cast<uint8_t>(step % SEQUENCER_NUM_STEPS);
+
+    Serial.print("[uCLOCK] onStepCallback, uClock raw step: "); Serial.print(step);
+    Serial.print(", wrapped step for sequencer: "); Serial.println(wrapped_step);
+    seq.advanceStep(wrapped_step); // Pass the wrapped step to the sequencer
     drawSequencerOLED(seq.getState());
-    // Serial.print("Core 1: uClock onStepCallback() called, step: "); Serial.println(step);
+    // Serial.println("------------------------------------"); // Optional separator for logs
 }
 
 // -----------------------------------------------------------------------------
@@ -366,6 +378,13 @@ void setup1() {
   delay(100); 
   Serial.println("Core 1: Setup1 starting. USB and Serial initialized.");
 
+  // Seed the random number generator
+  randomSeed(analogRead(A0) + millis()); // Use an unconnected analog pin and millis for better seed
+  Serial.println("Core 1: Random number generator seeded.");
+
+  // Initialize sequencer state BEFORE starting the clock that might use it
+  seq.init(); 
+
   usb_midi.begin(MIDI_CHANNEL_OMNI);
 
   // Initialize builtin led for clock timer blinking
@@ -409,7 +428,6 @@ void setup1() {
   drawSequencerOLED(seq.getState());
 
   Serial.println("Core 1: Setup1 complete.");
-  seq.init(); // Initialize sequencer using its public init method
 }
 
 // -----------------------------------------------------------------------------
