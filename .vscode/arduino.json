@@ -1,0 +1,6 @@
+{
+    "sketch": "Pico2DSP.ino",
+    "configuration": "flash=2097152_0,arch=arm,freq=200,variantchip=RP2350A,psramcs=GPIOnone,psram=0mb,psramfreq=freq109,opt=Small,profile=Disabled,rtti=Disabled,stackprotect=Disabled,exceptions=Disabled,dbgport=Disabled,dbglvl=None,usbstack=picosdk,ipbtstack=ipv4only,uploadmethod=default",
+    "board": "rp2040:rp2040:generic_rp2350",
+    "port": "COM46"
+}

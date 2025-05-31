@@ -1,0 +1,6 @@
+name: uClock
+version: 0.0.1
+schema: v1
+docs:
+  - name: uclock docs
+    startUrl: https://raw.githubusercontent.com/midilab/uClock/refs/heads/main/README.md
