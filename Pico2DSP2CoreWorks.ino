@@ -67,8 +67,7 @@ int mm = 0;
 #define OLED_DC 12
 #define OLED_CS 13
 #define OLED_RESET 9
-#define NOTE_LENGTH                                                            \
-  4 // min: 1 max: 23 DO NOT EDIT BEYOND!!! 12 = 50% on 96ppqn, same as original
+#define NOTE_LENGTH    4 // min: 1 max: 23 DO NOT EDIT BEYOND!!! 12 = 50% on 96ppqn, same as original
     // tb303. 62.5% for triplets time signature
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, OLED_MOSI, OLED_CLK,
                          OLED_DC, OLED_RESET, OLED_CS);
@@ -94,6 +93,9 @@ volatile bool trig1, trig2, trigenv1, trigenv2, dualEnvFlag;
 volatile bool buttonEventFlag = false;
 volatile uint8_t buttonEventIndex = 0;
 volatile uint8_t buttonEventType = 0;
+// Add button state tracking variables
+bool button16Held = false;
+bool button17Held = false;
 
 int scale[7][24] = {
     {0,  2,  4,  5,  7,  9,  11, 12, 14, 16, 17, 19,
@@ -309,65 +311,51 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
     if (evt.type == MATRIX_BUTTON_PRESSED) {
       seq.toggleStep(evt.buttonIndex);
     }
-  } else if (evt.type == MATRIX_BUTTON_PRESSED) {
+  } else  {
+   if (evt.type == MATRIX_BUTTON_PRESSED) {
     switch (evt.buttonIndex) {
     case 16: // Button 16
     {
-      // Read distance from sensor
-      int16_t distance = distanceRead_getDistance();
-      if (distance < 0) {
-        distance = 0; // Clamp negative to zero
-      }
-      if (distance > 800) {
-        distance = 800; // Clamp max to 800 mm
-      }
-      // Map 0-800 mm to 0-48 note range
-      int mappedNote = map(distance, 0, 800, 0, 48);
+              button16Held = true;
 
-      // Set the note to the current step (use evt.buttonIndex or another step
-      // index as needed) Here assuming current step is sequencer playhead
-      uint8_t currentStep = seq.getPlayhead();
-      seq.setStepNote(currentStep, mappedNote);
-      Serial.print(F("Mapped distance "));
-      Serial.print(distance);
-      Serial.print(F(" mm to note "));
-      Serial.println(mappedNote);
+     
     } break;
-    case 17: // Button 17
-      int16_t distance = distanceRead_getDistance();
-      if (distance < 0) {
-        distance = 0; // Clamp negative to zero
-      }
-      if (distance > 800) {
-        distance = 800; // Clamp max to 800 mm
-      }
-      // Map 0-800 mm to 0-48 note range
-      int mappedVelocity = map(distance, 0, 800, 0, 127);
-      uint8_t currentStep = seq.getPlayhead();
-      seq.setStepVelocity(currentStep, mappedVelocity);
+    case 17: 
+    {
+              button117Held = true;
 
-      // Serial.println("[MATRIX] Button 17 Pressed");
+    }
       break;
     // ... add cases for buttons 18 through 31 as needed ...
-    case 18: // Button 18
+    case 18: {}// Button 18
       // record DetuneAmt to current Step based on variable mm from distance
       // sensor
       break;
-    case 32: // Button 32
+    case 32: {}// Button 32
       // Handle button 32 press
       Serial.println("[MATRIX] Button 32 Pressed");
       break;
     default:
-      // Handle other button presses (if any beyond 32)
+     {} // Handle other button presses (if any beyond 32)
       Serial.print("[MATRIX] Unhandled Button Pressed: ");
       Serial.println(evt.buttonIndex);
       break;
     }
+  
   }
- 
+
+  else if (evt.type == MATRIX_BUTTON_RELEASED) {
+      if (evt.buttonIndex == 16) {
+          button16Held = false;
+}    if (evt.buttonIndex == 17) {
+          button17Held = false;
+}
   drawSequencerOLED(
       seq.getState()); // Update display on any relevant matrix event
-}
+}}}
+
+
+
 // -----------------------------------------------------------------------------
 // 7. MIDI & CLOCK HANDLERS
 // -----------------------------------------------------------------------------
@@ -438,12 +426,6 @@ void setup() {
   // --- Synth & Envelope ---
   initOscillators();
 
-  // Initialize distance sensor
-  if (!distanceRead_init()) {
-    Serial.println(F("Failed to initialize VL53L1X sensor"));
-  } else {
-    Serial.println(F("VL53L1X sensor initialized successfully"));
-  }
 
   // --- I2S Output Initialization ---
   static audio_format_t my_audio_format = {.sample_freq = (uint32_t)SAMPLE_RATE,
@@ -511,6 +493,14 @@ void setup1() {
   uClock.start();
   delay(45);
 
+  // Initialize distance sensor
+ // if (!distanceRead_init()) {
+  //  Serial.println(F("Failed to initialize VL53L1X sensor"));
+ // } else {
+ //  Serial.println(F("VL53L1X sensor initialized successfully"));
+  //} 
+
+
   // Touch sensor
   if (!touchSensor.begin()) {
     Serial.println(
@@ -552,14 +542,50 @@ void loop1() {
   if (currentMillis - previousMillis >= 1) {
     previousMillis = currentMillis;
     Matrix_scan(); // Add this line to process touch matrix events
+if (button16Held == true) {
+// Read distance from sensor
+      int16_t distance = random(0, 800);
+      if (distance < 0) {
+        distance = 0; // Clamp negative to zero
+      }
+      if (distance > 800) {
+        distance = 800; // Clamp max to 800 mm
+      }
+      // Map 0-800 mm to 0-48 note range
+      int mappedNote = map(distance, 0, 800, 0, 48);
 
+      // Set the note to the current step (use evt.buttonIndex or another step
+      // index as needed) Here assuming current step is sequencer playhead
+      uint8_t currentStep = seq.getPlayhead();
+      seq.setStepNote(currentStep, mappedNote);
+      Serial.print(F("Mapped distance "));
+      Serial.print(distance);
+      Serial.print(F(" mm to note "));
+      Serial.println(mappedNote);
+
+}
+
+if (button17Held == true) {
+// Read distance from sensor
+      int16_t distance = random(0, 800);
+      if (distance < 0) {
+        distance = 0; // Clamp negative to zero
+      }
+      if (distance > 800) {
+        distance = 800; // Clamp max to 800 mm
+      }
+      // Map 0-800 mm to 0-48 note range
+      int mappedVelocity = map(distance, 0, 800, 0, 127);
+      uint8_t currentStep = seq.getPlayhead();
+      seq.setStepVelocity(currentStep, mappedVelocity);
+}
     // Read distance sensor and print value
-    int16_t distance = distanceRead_getDistance();
+   /* int16_t distance = distanceRead_getDistance();
     if (distance >= 0) {
       Serial.print(F("Distance: "));
       Serial.print(distance);
       Serial.println(F(" mm"));
-    }
+   */ }
   }
 
-} // Closes loop1()
+

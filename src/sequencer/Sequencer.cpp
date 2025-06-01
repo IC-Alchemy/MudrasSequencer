@@ -67,13 +67,9 @@ void Sequencer::initializeSteps() {
     Serial.println("[SEQ] Initializing steps...");
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
         state.steps[i] = Step(); // Default initialization
-        state.steps[i].note = random(0, SEQUENCER_NUM_STEPS - 2); // 0-14
-        // Optional presets at indices 0,4,8,12
-        state.steps[0].note = 0;
-        state.steps[4].note = 3;
-        state.steps[8].note = 5;
-        state.steps[12].note = 8;
-        state.steps[i].gate = false; // All gates off initially
+        state.steps[i].note = random(0, SEQUENCER_NUM_STEPS - 2); 
+
+        state.steps[i].gate = true; // All gates off initially
             // Serial.print("  Step "); Serial.print(i);
             // Serial.print(": ON, Note Index: "); Serial.println(state.steps[i].note);
       
@@ -81,6 +77,10 @@ void Sequencer::initializeSteps() {
             // Serial.print(": OFF, Note Index: "); Serial.println(state.steps[i].note);
         
     }
+            state.steps[0].note = 0;
+        state.steps[4].note = 3;
+        state.steps[8].note = 5;
+        state.steps[12].note = 8;
 }
 
 
