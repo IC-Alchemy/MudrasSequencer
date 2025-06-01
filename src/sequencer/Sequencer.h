@@ -6,14 +6,25 @@
  * advance, and state query. Designed for integration with matrix scanning and
  * output modules (MIDI, gate).
  *
- * Usage:
+ * Example:
  *   #include "Sequencer.h"
  *   Sequencer seq;
+ *   // Initialize and start
+ *   if (!seq.init()) { Serial.println("Sequencer init failed"); }
  *   seq.start();
- *   seq.advanceStep();
- *   seq.toggleStep(3);
- *   uint8_t ph = seq.getPlayhead();
- *   const Step& s = seq.getStep(3);
+ *
+ *   // Configure steps
+ *   // step 0: gate on, slide off, note index 8, velocity 0.75, filter 0.3
+ *   seq.setStep(0, true, false, 8, 0.75f, 0.3f);
+ *   // step 1 using Step object
+ *   seq.setStep(1, Step(true, true, 12, 1.0f, 0.5f));
+ *
+ *   // In clock callback
+ *   void onClockTick(uint8_t beat) {
+ *       seq.advanceStep(beat);
+ *       const Step& stepData = seq.getStep(beat);
+ *       // Use stepData.gate, stepData.note, stepData.velocity, stepData.filter
+ *   }
  */
 
 #ifndef SEQUENCER_H
@@ -24,6 +35,8 @@ extern volatile bool trigenv1;
 extern volatile bool trigenv2;
 #include <Adafruit_TinyUSB.h>
 #include <MIDI.h>
+
+#define SEQUENCER_NUM_STEPS 16
 
 extern midi::MidiInterface<midi::SerialMIDI<Adafruit_USBD_MIDI>> usb_midi;
 
@@ -65,6 +78,10 @@ public:
   // Set note for a step
   void setStepNote(uint8_t stepIdx, uint8_t note);
 
+  // Set full step data (overloads)
+  void setStep(int index, bool gate, bool slide, int note, float velocity, float filter);
+  void setStep(int index, const Step& stepData);
+
 // Convert absolute MIDI note (0-127) to the semitone-offset scheme used by the audio thread
     void setOscillatorFrequency(uint8_t midiNote);
   // Query step and playhead state
@@ -81,6 +98,7 @@ void triggerEnvelope();
     void releaseEnvelope();
 
 private:
+    // Sequencer state now stored in SequencerState from SequencerDefs.h
     void resetState();
     void initializeSteps();
     bool validateState() const;

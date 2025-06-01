@@ -5,10 +5,19 @@
  * Defines step state, note, gate, and playhead types for use in the Sequencer
  * module.
  *
- * Usage:
+ * Example:
  *   #include "SequencerDefs.h"
- *   // Used internally by Sequencer class and for integration with
- * matrix/output modules.
+ *   // Create default Step
+ *   Step defaultStep;
+ *   // defaultStep.gate==false, slide==false, note==0, velocity==0.0, filter==0.0
+ *
+ *   // Create and configure a custom Step
+ *   Step customStep(true, true, 7, 0.9f, 0.3f);
+ *
+ *   // Use in SequencerState
+ *   SequencerState state;
+ *   state.steps[0] = customStep;
+ *   state.running = true;
  */
 
 #ifndef SEQUENCER_DEFS_H
@@ -22,17 +31,20 @@ constexpr uint8_t SEQUENCER_NUM_STEPS = 16;
 // Size of the global 'scale' array defined in the main .ino file
 constexpr uint8_t SCALE_ARRAY_SIZE = 40;
 
-// Step state: ON = step will trigger, OFF = step is skipped
-enum class StepState : uint8_t { OFF = 0, ON = 1 };
-
 // Represents a single step in the sequencer
 struct Step {
-  StepState state; // ON/OFF
-  uint8_t note;    // Scale index (e.g., 0-14) for note selection from 'scale[]' array.
-  bool gate;       // Gate output state (true = gate on)
-  Step()
-      : state(StepState::OFF), note(0), gate(false) {
-  } // Default: Step is OFF, note index 0, gate is false.
+  bool gate = false;      // Gate ON (true) or OFF (false)
+  bool slide = false;     // Slide ON (true) or OFF (false)
+  int note = 0;           // Note value, 0-24
+  float velocity = 0.5f;  // Velocity, 0.0f - 1.0f
+  float filter = 0.0f;    // Filter value, 0.0f - 1.0f
+
+  // Default constructor initializes to sensible defaults
+  Step() = default;
+
+  // Parameterized constructor for convenience
+  Step(bool g, bool s, int n, float v, float f)
+      : gate(g), slide(s), note(n), velocity(v), filter(f) {}
 };
 
 // Playhead position (0..SEQUENCER_NUM_STEPS-1)

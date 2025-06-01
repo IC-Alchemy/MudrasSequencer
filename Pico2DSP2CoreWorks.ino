@@ -215,8 +215,8 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
   for (int i = 0; i < N; ++i) {
     osc1.SetFreq(daisysp::mtof(note1 ));
-    osc2.SetFreq(daisysp::mtof(note1 )*1.0022f);
-    osc3.SetFreq(daisysp::mtof(note1 )*.9985f);
+    osc2.SetFreq(daisysp::mtof(note1 )*1.0032f);
+    osc3.SetFreq(daisysp::mtof(note1 )*.9975f);
     //osc4.SetFreq(daisysp::mtof(note1 ));
 
     float current_out1 = env1.Process(trigenv1);
@@ -255,9 +255,9 @@ void initOscillators() {
   env2.SetAttackTime(0.001f);
   env1.SetDecayTime(0.121f);
   env2.SetDecayTime(0.121f);
-  env1.SetSustainLevel(0.2f);
-  env2.SetSustainLevel(0.2f);
-  env2.SetReleaseTime(0.04f);
+  env1.SetSustainLevel(0.f);
+  env2.SetSustainLevel(0.f);
+  env2.SetReleaseTime(0.03f);
 
   // Set initial waveform for all oscillators
   osc1.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
@@ -277,23 +277,20 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
 
     if (evt.buttonIndex < 16) { // Sequencer steps 0-15
         if (evt.type == MATRIX_BUTTON_PRESSED) {
-            Serial.print("  - Toggling sequencer step: "); Serial.println(evt.buttonIndex);
             seq.toggleStep(evt.buttonIndex);
-            // You could add a call here to a new Sequencer method to print the specific step's state
-            // e.g., seq.printStepState(evt.buttonIndex);
-            // This would require modifying the Sequencer class.
+            
         }
-    } else if (evt.buttonIndex >17 ) { // Page toggle button (example for button 16)
+    } else if (evt.buttonIndex ==17 || evt.buttonIndex ==18|| evt.buttonIndex ==19 ) { // Page toggle button (example for button 16)
         if (evt.type == MATRIX_BUTTON_PRESSED) {
            // seq.init(); 
-            Serial.println("  - seqInit.");
-            //sequencer_display_page = !sequencer_display_page; // Toggle display page
+           // Serial.println("  - seqInit.");
+            sequencer_display_page = !sequencer_display_page; // Toggle display page
         }
     }
     // OLED is off, so drawing is not the issue for audible feedback
     // Consider only drawing if a relevant button for the sequencer/display was pressed.
     // For now, drawing on any matrix event is fine for debugging.
-    //drawSequencerOLED(seq.getState()); // Update display on any relevant matrix event
+   drawSequencerOLED(seq.getState()); // Update display on any relevant matrix event
 }
 // -----------------------------------------------------------------------------
 // 7. MIDI & CLOCK HANDLERS
@@ -346,11 +343,11 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
     seq.advanceStep(wrapped_step); // Pass the wrapped step to the sequencer
 
     // DEBUG: Check the state of trigenv1 and note1 AFTER advanceStep
-    //Serial.print("  [SEQ_OUT] Step: "); Serial.print(wrapped_step);
-    //Serial.print(", trigenv1: "); Serial.print(trigenv1 ? "ON" : "OFF");
+  //  Serial.print("  [SEQ_OUT] Step: "); Serial.print(wrapped_step);
+   // Serial.print(", trigenv1: "); Serial.print(trigenv1 ? "ON" : "OFF");
     //Serial.print(", note1: "); Serial.println(note1);
 
-  drawSequencerOLED(seq.getState()); // OLED is off
+    drawSequencerOLED(seq.getState()); // OLED is off
     // Serial.println("------------------------------------"); // Optional separator for logs
 }
 
@@ -386,7 +383,8 @@ void setup() {
   audio_i2s_set_enabled(true);
 
   // --- Initial Envelope Triggers ---
- 
+  trigenv1 = false; // Explicitly initialize envelope trigger flags
+  trigenv2 = false;
 
   // --- Initial OLED Sequencer State ---
 
@@ -444,7 +442,7 @@ delay(45);
   Serial.println("Core 1: Setup1 complete.");
 }
 
-// --------------------------------------------------------------------------
+// ------------------------------------------------------------------------
 // 9. MAIN LOOPS
 // --------------------------------------------------------------------------
 
@@ -462,7 +460,7 @@ void loop1() {
 
 unsigned long currentMillis = millis();
 
- if (currentMillis - previousMillis >= 2) {
+ if (currentMillis - previousMillis >= 1) {
   previousMillis = currentMillis;
       Matrix_scan(); // Add this line to process touch matrix events
 

@@ -11,6 +11,7 @@
  */
 
 #include "Sequencer.h"
+#include <Arduino.h>
 
 // Access global note1 and scale[] from main .ino
 extern volatile int note1;
@@ -30,11 +31,6 @@ namespace {
     // Helper: Validate a MIDI note value
     inline bool isValidMidiNote(uint8_t note) {
         return note <= 127;
-    }
-
-    // Helper: Validate a StepState value
-    inline bool isValidStepState(StepState state) {
-        return state == StepState::ON || state == StepState::OFF;
     }
 }
 
@@ -70,23 +66,20 @@ void Sequencer::resetState() {
 void Sequencer::initializeSteps() {
     Serial.println("[SEQ] Initializing steps...");
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
-        state.steps[i] = Step(); // Step is now OFF by default from constructor
-        state.steps[i].note = random(0, 14); // Assign a random scale index (0-14)
-        state.steps[0].note = 0; // Assign a random scale index (0-14)
-        state.steps[4].note = 3; // Assign a random scale index (0-14)
-        state.steps[8].note = 5; // Assign a random scale index (0-14)
-        state.steps[12].note = 8; // Assign a random scale index (0-14)
-
-        // Randomly turn ON some steps and set their gate to true
-        if (random(0, 2) == 0) {
-            state.steps[i].state = StepState::ON;
-            state.steps[i].gate = true; // If step is ON, its gate should be true
+        state.steps[i] = Step(); // Default initialization
+        state.steps[i].note = random(0, SEQUENCER_NUM_STEPS - 2); // 0-14
+        // Optional presets at indices 0,4,8,12
+        state.steps[0].note = 0;
+        state.steps[4].note = 3;
+        state.steps[8].note = 5;
+        state.steps[12].note = 8;
+        state.steps[i].gate = false; // All gates off initially
             // Serial.print("  Step "); Serial.print(i);
             // Serial.print(": ON, Note Index: "); Serial.println(state.steps[i].note);
-        } else {
+      
             // Serial.print("  Step "); Serial.print(i);
             // Serial.print(": OFF, Note Index: "); Serial.println(state.steps[i].note);
-        }
+        
     }
 }
 
@@ -102,12 +95,7 @@ bool Sequencer::validateState() const {
     }
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
         const Step& s = state.steps[i];
-        // s.note is now a scale index. Validation of index range should ideally consider
-        // the actual size of the 'scale' array. For now, we rely on initialization
-        // and setStepNote to manage this. We only check StepState here.
-        if (!isValidStepState(s.state)) {
-            return false;
-        }
+        // gate must be bool, no extra validation needed
     }
     return true;
 }
@@ -166,71 +154,50 @@ void Sequencer::reset() {
  * @param current_uclock_step The current step number (0-15) provided by uClock.
  */
 void Sequencer::advanceStep(uint8_t current_uclock_step) {
-  //  Serial.print("[SEQ] advanceStep called with uClock step: "); Serial.println(current_uclock_step);
     if (!state.running) {
-        // Serial.println("  - Sequencer not running. Returning."); // Keep this one for now if needed
         return;
     }
 
-    // Ensure the step value wraps to the sequencer's number of steps (0-15)
-
-        current_uclock_step = current_uclock_step % SEQUENCER_NUM_STEPS;
-
-
-    // --- Previous Note Handling ---
-    // Send Note Off for the previously sounding MIDI note.
+    // Wrap step index to sequencer length
+ state.playhead = current_uclock_step;
+    Step &currentStep = state.steps[state.playhead];
     if (lastNote >= 0) {
-        // Serial.print("  - Sending NoteOff for previous note: "); Serial.println(lastNote);
         usb_midi.sendNoteOff(lastNote, 0, 1); // Channel 1, velocity 0
     }
 
-    // --- Set Playhead based on uClock's current step ---
-    // The playhead is now directly set by the step provided by uClock.
-    state.playhead = current_uclock_step;
-    Step &currentStep = state.steps[state.playhead]; // Get the step uClock says is current
-
-    // Serial.print("  - Playhead set to: "); Serial.print(state.playhead);
-    // Serial.print(" - Step State: "); Serial.print(currentStep.state == StepState::ON ? "ON" : "OFF");
-    // Serial.print(", Step Gate: "); Serial.println(currentStep.gate ? "TRUE" : "FALSE");
-
-    // --- Current Step Processing ---
-    if (currentStep.state == StepState::ON) {
-        // Serial.println("    - Step IS ON. Processing note.");
-        currentStep.gate = true; // Gate is conceptually high for an ON step
-
- 
-        uint8_t scaleIndex = currentStep.note;
-
-        
-     
-        // sizeof(scale)/sizeof(scale[0]) gives number of elements. Max index is size-1.
-        if (scaleIndex >= scaleSize) {
-            scaleIndex = 0;
+    
+    if (currentStep.gate) {
+        // Clamp note index to scale size
+        uint8_t scaleIndex = (currentStep.note >= scaleSize) ? 0 : currentStep.note;
+  // Ensure scaleIndex is valid for the actual 'scale' array bounds.
+        if (scaleIndex >= SCALE_ARRAY_SIZE) { // Defensive check
+            scaleIndex = 0; 
         }
-        // Serial.print("      - Value from scale["); Serial.print(scaleIndex); Serial.print("]: "); Serial.println(scale[scaleIndex]);
+        int new_midi_note = MIDI_BASE_NOTE + scale[scaleIndex];
 
-        uint8_t actualMidiNote = MIDI_BASE_NOTE + scale[scaleIndex];
-        // Serial.print("      - Calculated MIDI Note (base + offset): "); Serial.println(actualMidiNote);
+        // Update the synth engine's target note (global variable).
+        note1 = new_midi_note;
 
-        // Send MIDI Note On
-        usb_midi.sendNoteOn(actualMidiNote, 100, 1); // Velocity 100, Channel 1
-        // Serial.println("      - MIDI NoteOn SENT.");
+        // Trigger the envelope. This will cause re-articulation on every gated step.
+        // If slide/legato functionality were implemented, this call would be conditional.
+        triggerEnvelope(); // Sets trigenv1 = true
 
-        // Update global synth parameter (note1) with the absolute MIDI note
-        note1 = actualMidiNote;
-        // Serial.print("      - Global note1 set to: "); Serial.println(note1);
+        // Use velocity and filter from step (velocity mapped to MIDI 0-127)
+        uint8_t midiVelocity = static_cast<uint8_t>(currentStep.velocity * 127.0f);
+        if (midiVelocity > 127) midiVelocity = 127;
 
-        triggerEnvelope();
-        // Serial.println("      - Envelope TRIGGERED.");
+// Send MIDI Note On for the current step's note.
+        usb_midi.sendNoteOn(new_midi_note, midiVelocity, 1); // Channel 1
 
-        // Store the actual MIDI note that was just turned on
-        lastNote = actualMidiNote;
-    } else { // Current step is OFF
-        // Serial.println("    - Step IS OFF. Releasing envelope.");
-        currentStep.gate = false; // Gate is low
-        releaseEnvelope();
-        // No new note is played, lastNote remains from previous NoteOff or is -1
-        lastNote = -1; // Explicitly no MIDI note is sounding from the sequencer
+        // Optionally: apply currentStep.filter to synth engine here
+        // Optionally: apply currentStep.filter to synth engine here
+
+        lastNote = new_midi_note; // Update lastNote to the currently playing MIDI note.
+    } else {
+           // Current step's gate is OFF (a rest).
+        // The MIDI Note Off for any previously sounding note was handled above.
+        releaseEnvelope(); // Sets trigenv1 = false
+        lastNote = -1;     // No MIDI note is actively sounding from the sequencer.     
     }
 }
 
@@ -262,25 +229,15 @@ void Sequencer::releaseEnvelope() {
     trigenv1 = false;
     trigenv2 = false;
 }
-
-/**
- * @brief Toggle the ON/OFF state of a step.
- * @param stepIdx Index of the step to toggle.
- */
+// ToggleStep
 void Sequencer::toggleStep(uint8_t stepIdx) {
-    // Serial.print("[SEQ] toggleStep called for index: "); Serial.println(stepIdx);
     if (stepIdx >= SEQUENCER_NUM_STEPS) {
-        // Serial.println("  - Invalid step index. Returning.");
+        // Handle out-of-bounds index, e.g., log an error or return
+        // Serial.print("[SEQ] toggleStep: Invalid step index: "); Serial.println(stepIdx);
         return;
     }
-    Step &s = state.steps[stepIdx];
-    s.state = (s.state == StepState::ON) ? StepState::OFF : StepState::ON;
-    s.gate = (s.state == StepState::ON); // Update gate to match the new state
-  Serial.print("  - Step "); Serial.print(stepIdx);
-   Serial.print(" new state: "); Serial.print(s.state == StepState::ON ? "ON" : "OFF");
-    Serial.print(", new gate: "); Serial.println(s.gate ? "TRUE" : "FALSE");
+    state.steps[stepIdx].gate = !state.steps[stepIdx].gate;
 }
-
 /**
  * @brief Set the MIDI note for a specific step.
  * The 'note' parameter is treated as a scale index.
@@ -296,6 +253,55 @@ void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
     state.steps[stepIdx].note = noteIndex;
     // Serial.print("  - Step "); Serial.print(stepIdx);
     // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);
+}
+/**
+ * @brief Set full step data using individual parameters.
+ */
+void Sequencer::setStep(int index, bool gate, bool slide, int note, float velocity, float filter) {
+    if (index < 0 || index >= SEQUENCER_NUM_STEPS) {
+        Serial.println("Sequencer::setStep: Step index out of range.");
+        return;
+    }
+    if (note < 0 || note > 24) {
+        Serial.println("Sequencer::setStep: Note value out of range (0-24).");
+        return;
+    }
+    if (velocity < 0.0f || velocity > 1.0f) {
+        Serial.println("Sequencer::setStep: Velocity value out of range (0.0f-1.0f).");
+        return;
+    }
+    if (filter < 0.0f || filter > 1.0f) {
+        Serial.println("Sequencer::setStep: Filter value out of range (0.0f-1.0f).");
+        return;
+    }
+    state.steps[index].gate = gate;
+    state.steps[index].slide = slide;
+    state.steps[index].note = static_cast<uint8_t>(note);
+    state.steps[index].velocity = velocity;
+    state.steps[index].filter = filter;
+}
+
+/**
+ * @brief Set full step data using a Step object.
+ */
+void Sequencer::setStep(int index, const Step& stepData) {
+    if (index < 0 || index >= SEQUENCER_NUM_STEPS) {
+        Serial.println("Sequencer::setStep: Step index out of range.");
+        return;
+    }
+    if (stepData.note < 0 || stepData.note > 24) {
+        Serial.println("Sequencer::setStep: Note value in Step object out of range (0-24).");
+        return;
+    }
+    if (stepData.velocity < 0.0f || stepData.velocity > 1.0f) {
+        Serial.println("Sequencer::setStep: Velocity value in Step object out of range (0.0f-1.0f).");
+        return;
+    }
+    if (stepData.filter < 0.0f || stepData.filter > 1.0f) {
+        Serial.println("Sequencer::setStep: Filter value in Step object out of range (0.0f-1.0f).");
+        return;
+    }
+    state.steps[index] = stepData;
 }
 
 /**
