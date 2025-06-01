@@ -14,8 +14,11 @@
 
 // Access global note1 and scale[] from main .ino
 extern volatile int note1;
-extern int scale[];
+extern int scale[40];
 extern volatile bool trigenv1; // Used for triggering envelope
+extern volatile bool trigenv2; // Used for triggering envelope
+
+const size_t scaleSize = SCALE_ARRAY_SIZE; // Use the defined constant
 
 // Define a base MIDI note for the scale. This could be configurable.
 const uint8_t MIDI_BASE_NOTE = 36; // Example: C1 (MIDI note 36)
@@ -68,7 +71,11 @@ void Sequencer::initializeSteps() {
     Serial.println("[SEQ] Initializing steps...");
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
         state.steps[i] = Step(); // Step is now OFF by default from constructor
-        state.steps[i].note = random(0, 15); // Assign a random scale index (0-14)
+        state.steps[i].note = random(0, 14); // Assign a random scale index (0-14)
+        state.steps[0].note = 0; // Assign a random scale index (0-14)
+        state.steps[4].note = 3; // Assign a random scale index (0-14)
+        state.steps[8].note = 5; // Assign a random scale index (0-14)
+        state.steps[12].note = 8; // Assign a random scale index (0-14)
 
         // Randomly turn ON some steps and set their gate to true
         if (random(0, 2) == 0) {
@@ -159,18 +166,16 @@ void Sequencer::reset() {
  * @param current_uclock_step The current step number (0-15) provided by uClock.
  */
 void Sequencer::advanceStep(uint8_t current_uclock_step) {
-    Serial.print("[SEQ] advanceStep called with uClock step: "); Serial.println(current_uclock_step);
+  //  Serial.print("[SEQ] advanceStep called with uClock step: "); Serial.println(current_uclock_step);
     if (!state.running) {
         // Serial.println("  - Sequencer not running. Returning."); // Keep this one for now if needed
         return;
     }
 
-    // Validate the incoming step from uClock
-    if (current_uclock_step >= SEQUENCER_NUM_STEPS) {
-        // Serial.print("  - WARN: uClock step out of bounds: "); Serial.print(current_uclock_step);
-        current_uclock_step = 0; // Or handle error more gracefully
-        // Serial.print(", corrected to: "); Serial.println(current_uclock_step);
-    }
+    // Ensure the step value wraps to the sequencer's number of steps (0-15)
+
+        current_uclock_step = current_uclock_step % SEQUENCER_NUM_STEPS;
+
 
     // --- Previous Note Handling ---
     // Send Note Off for the previously sounding MIDI note.
@@ -193,31 +198,17 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
         // Serial.println("    - Step IS ON. Processing note.");
         currentStep.gate = true; // Gate is conceptually high for an ON step
 
-        // Calculate the actual MIDI note for this step
-        // currentStep.note is a scale index (e.g., 0-14)
+ 
         uint8_t scaleIndex = currentStep.note;
 
-        // Validate scaleIndex. Since initializeSteps uses random(0,15),
-        // scaleIndex will be 0-14. A check against the actual size of `scale[]`
-        // or a defined MAX_SCALE_INDEX would be more robust if setStepNote could set higher values.
-        // Serial.print("      - Scale Index from step.note: "); Serial.println(scaleIndex);
-        if (scaleIndex >= 15) { // Max index from random(0,15) is 14. Safeguard. Should match scale array bounds.
-            // Serial.print("      - WARN: scaleIndex out of expected range (0-14), resetting to 0. Was: "); Serial.println(scaleIndex);
-            scaleIndex = 0; // Default to a safe index if somehow out of expected range.
-        }
-
-        // Ensure scaleIndex is within bounds of the actual scale array.
+        
+     
         // sizeof(scale)/sizeof(scale[0]) gives number of elements. Max index is size-1.
-        const size_t scaleSize = SCALE_ARRAY_SIZE; // Use the defined constant
         if (scaleIndex >= scaleSize) {
-            // Serial.print("      - WARN: scaleIndex ("); Serial.print(scaleIndex);
-            // Serial.print(") is out of bounds for scale[] array (size: "); Serial.print(scaleSize);
-            // Serial.println("). Resetting to 0.");
             scaleIndex = 0;
         }
         // Serial.print("      - Value from scale["); Serial.print(scaleIndex); Serial.print("]: "); Serial.println(scale[scaleIndex]);
 
-        // Assuming scale[] contains offsets from MIDI_BASE_NOTE
         uint8_t actualMidiNote = MIDI_BASE_NOTE + scale[scaleIndex];
         // Serial.print("      - Calculated MIDI Note (base + offset): "); Serial.println(actualMidiNote);
 
@@ -285,9 +276,9 @@ void Sequencer::toggleStep(uint8_t stepIdx) {
     Step &s = state.steps[stepIdx];
     s.state = (s.state == StepState::ON) ? StepState::OFF : StepState::ON;
     s.gate = (s.state == StepState::ON); // Update gate to match the new state
-    // Serial.print("  - Step "); Serial.print(stepIdx);
-    // Serial.print(" new state: "); Serial.print(s.state == StepState::ON ? "ON" : "OFF");
-    // Serial.print(", new gate: "); Serial.println(s.gate ? "TRUE" : "FALSE");
+  Serial.print("  - Step "); Serial.print(stepIdx);
+   Serial.print(" new state: "); Serial.print(s.state == StepState::ON ? "ON" : "OFF");
+    Serial.print(", new gate: "); Serial.println(s.gate ? "TRUE" : "FALSE");
 }
 
 /**
@@ -302,8 +293,6 @@ void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
         // Serial.println("  - Invalid step index. Returning.");
         return;
     }
-    // Add validation for noteIndex if MAX_SCALE_INDEX is known
-    // For now, assume noteIndex is valid (e.g., 0-14 if that's the intended range for scale[])
     state.steps[stepIdx].note = noteIndex;
     // Serial.print("  - Step "); Serial.print(stepIdx);
     // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);

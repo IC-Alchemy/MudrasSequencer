@@ -61,7 +61,7 @@
 #define OLED_DC    12
 #define OLED_CS    13
 #define OLED_RESET 9
-#define NOTE_LENGTH        12 // min: 1 max: 23 DO NOT EDIT BEYOND!!! 12 = 50% on 96ppqn, same as original tb303. 62.5% for triplets time signature
+#define NOTE_LENGTH        4 // min: 1 max: 23 DO NOT EDIT BEYOND!!! 12 = 50% on 96ppqn, same as original tb303. 62.5% for triplets time signature
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, OLED_MOSI, OLED_CLK, OLED_DC, OLED_RESET, OLED_CS);
 
 // --- Sequencer ---
@@ -87,7 +87,7 @@ volatile uint8_t buttonEventType = 0;
 
 // --- Scale Table ---
 int scale[40] = {
-  0,2,4,5,7,9,10,12,14,16,17,19,21,22,24,26,28,29,31,33,34,36,38,40,41,43,46,46,48,50,52,53,55,57,58,60,60,60,60,60
+  0,2,3,5,7,9,10,12,14,15,17,19,21,22,24,26,28,29,31,33,34,36,38,40,41,43,46,46,48,50,52,53,55,57,58,60,60,60,60,60
 };
 
 // --- Audio & Synth ---
@@ -109,7 +109,7 @@ audio_buffer_pool_t *producer_pool = nullptr;
 
 // --- Timing ---
 unsigned long previousMillis = 0;
-const long interval = 333; // ms
+const long interval = 1; // ms
 
 // -----------------------------------------------------------------------------
 // 3. UTILITY FUNCTIONS
@@ -128,7 +128,26 @@ static inline int16_t convertSampleToInt16(float sample) {
 // -----------------------------------------------------------------------------
 // 4. DISPLAY: OLED SEQUENCER VISUALIZATION
 // -----------------------------------------------------------------------------
+  
 
+void initOLED(){
+
+  // --- OLED Display ---
+  if (!display.begin(SSD1306_SWITCHCAPVCC)) {
+    for (;;); // Display initialization failed, halt
+  }
+  display.clearDisplay();
+      display.setTextSize(1);         // Normal 1:1 pixel scale
+
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println(F("Sequencer OLED Ready"));
+  display.display();
+  //delay(10000);
+  display.clearDisplay();
+  display.display();
+
+}
 void drawSequencerOLED(const SequencerState& seqState) {
   display.clearDisplay();
   display.setTextSize(1);
@@ -192,32 +211,26 @@ void drawSequencerOLED(const SequencerState& seqState) {
 void fill_audio_buffer(audio_buffer_t *buffer) {
   int N = buffer->max_sample_count;
   int16_t *out = reinterpret_cast<int16_t *>(buffer->buffer->bytes);
-  unsigned long currentMillis = millis();
 
-  if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;
-    // (LED blink or other timed events could go here)
-  }
 
   for (int i = 0; i < N; ++i) {
     osc1.SetFreq(daisysp::mtof(note1 ));
-    osc2.SetFreq(daisysp::mtof(note1 )*1.003f);
-    osc3.SetFreq(daisysp::mtof(note1 ));
-    osc4.SetFreq(daisysp::mtof(note1 ));
+    osc2.SetFreq(daisysp::mtof(note1 )*1.0022f);
+    osc3.SetFreq(daisysp::mtof(note1 )*.9985f);
+    //osc4.SetFreq(daisysp::mtof(note1 ));
 
     float current_out1 = env1.Process(trigenv1);
     float current_out2 = env2.Process(trigenv2);
 
     float osc111 = osc1.Process();
     float osc222 = osc2.Process();
-    float osc333 = osc3.Process();
-    float osc444 = osc4.Process();
+  float osc333 = osc3.Process();
+   // float osc444 = osc4.Process();
 
-    float out1 = (osc111 + osc222) * current_out1;
-    float out2 = (osc333 + osc444) * current_out2;
-
-    float sumL = out1;    // * 0.5f;
-    float sumR = out2;    // * 0.5f;
+    float out1 = (osc111 + osc222+ osc333) * current_out1;
+   // float out2 = (osc333 + osc444) * current_out2;
+ float sumL = out1 * 0.5f;
+    float sumR = out1 * 0.5f;
 
     int16_t intSampleL = convertSampleToInt16(sumL);
     int16_t intSampleR = convertSampleToInt16(sumR);
@@ -240,11 +253,11 @@ void initOscillators() {
   env1.SetReleaseTime(.061f);
   env1.SetAttackTime(0.0016f);
   env2.SetAttackTime(0.001f);
-  env1.SetDecayTime(0.071f);
-  env2.SetDecayTime(0.071f);
-  env1.SetSustainLevel(0.4f);
-  env2.SetSustainLevel(0.4f);
-  env2.SetReleaseTime(0.05f);
+  env1.SetDecayTime(0.121f);
+  env2.SetDecayTime(0.121f);
+  env1.SetSustainLevel(0.2f);
+  env2.SetSustainLevel(0.2f);
+  env2.SetReleaseTime(0.04f);
 
   // Set initial waveform for all oscillators
   osc1.SetWaveform(daisysp::Oscillator::WAVE_POLYBLEP_SAW);
@@ -259,23 +272,28 @@ void initOscillators() {
 // -----------------------------------------------------------------------------
 
 void matrixEventHandler(const MatrixButtonEvent &evt) {
-   // Serial.print("[MATRIX] Event! Index: "); Serial.print(evt.buttonIndex);
-  //  Serial.print(", Type: "); Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" : "RELEASED");
+    Serial.print("[MATRIX] Event! Index: "); Serial.print(evt.buttonIndex);
+    Serial.print(", Type: "); Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" : "RELEASED");
 
     if (evt.buttonIndex < 16) { // Sequencer steps 0-15
         if (evt.type == MATRIX_BUTTON_PRESSED) {
             Serial.print("  - Toggling sequencer step: "); Serial.println(evt.buttonIndex);
             seq.toggleStep(evt.buttonIndex);
+            // You could add a call here to a new Sequencer method to print the specific step's state
+            // e.g., seq.printStepState(evt.buttonIndex);
+            // This would require modifying the Sequencer class.
         }
-    } else if (evt.buttonIndex == 31) { // Page toggle button (example for button 16)
+    } else if (evt.buttonIndex >17 ) { // Page toggle button (example for button 16)
         if (evt.type == MATRIX_BUTTON_PRESSED) {
-            Serial.println("  - Toggling display page.");
-            sequencer_display_page = !sequencer_display_page; // Toggle display page
+           // seq.init(); 
+            Serial.println("  - seqInit.");
+            //sequencer_display_page = !sequencer_display_page; // Toggle display page
         }
     }
+    // OLED is off, so drawing is not the issue for audible feedback
     // Consider only drawing if a relevant button for the sequencer/display was pressed.
     // For now, drawing on any matrix event is fine for debugging.
-    drawSequencerOLED(seq.getState()); // Update display on any relevant matrix event
+    //drawSequencerOLED(seq.getState()); // Update display on any relevant matrix event
 }
 // -----------------------------------------------------------------------------
 // 7. MIDI & CLOCK HANDLERS
@@ -324,8 +342,15 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
 
   //  Serial.print("[uCLOCK] onStepCallback, uClock raw step: "); Serial.print(step);
   //  Serial.print(", wrapped step for sequencer: "); Serial.println(wrapped_step);
+
     seq.advanceStep(wrapped_step); // Pass the wrapped step to the sequencer
-    drawSequencerOLED(seq.getState());
+
+    // DEBUG: Check the state of trigenv1 and note1 AFTER advanceStep
+    //Serial.print("  [SEQ_OUT] Step: "); Serial.print(wrapped_step);
+    //Serial.print(", trigenv1: "); Serial.print(trigenv1 ? "ON" : "OFF");
+    //Serial.print(", note1: "); Serial.println(note1);
+
+  drawSequencerOLED(seq.getState()); // OLED is off
     // Serial.println("------------------------------------"); // Optional separator for logs
 }
 
@@ -367,21 +392,22 @@ void setup() {
 
 }
 void setup1() {
+    Serial.begin(115200);
+
 #if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
   // Initialize TinyUSB stack. This should be done once, early, on the core handling USB.
   TinyUSB_Device_Init(0);
 #endif
 
   // Initialize Serial for debugging AFTER TinyUSB is initialized.
-  Serial.begin(115200);
   // A small delay can sometimes help ensure the serial monitor is ready.
-  delay(random(333)); 
-  Serial.println("Core 1: Setup1 starting. USB and Serial initialized.");
+ // delay(random(333)); 
+//  Serial.println("Core 1: Setup1 starting. USB and Serial initialized.");
 delay(random(333));
   // Seed the random number generator
   randomSeed(analogRead(A0) + millis()); // Use an unconnected analog pin and millis for better seed
-  Serial.println("Core 1: Random number generator seeded.");
-
+ // Serial.println("Core 1: Random number generator seeded.");
+initOLED();
   // Initialize sequencer state BEFORE starting the clock that might use it
   seq.init(); 
 
@@ -397,23 +423,10 @@ delay(random(333));
   uClock.setOnClockStart(onClockStart);
   uClock.setOnClockStop(onClockStop);
   uClock.setOnStep(onStepCallback);
-  uClock.setTempo(126);
+  uClock.setTempo(90);
   uClock.start();
+delay(45);
 
-  // --- OLED Display ---
-  if (!display.begin(SSD1306_SWITCHCAPVCC)) {
-    for (;;); // Display initialization failed, halt
-  }
-  display.clearDisplay();
-      display.setTextSize(1);         // Normal 1:1 pixel scale
-
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println(F("Sequencer OLED Ready"));
-  display.display();
-  delay(1000);
-  display.clearDisplay();
-  display.display();
   // Touch sensor
   if (!touchSensor.begin()) {
     Serial.println("Core 1: ERROR - MPR121 not found. Check wiring and I2C address!");
@@ -431,12 +444,12 @@ delay(random(333));
   Serial.println("Core 1: Setup1 complete.");
 }
 
-// -----------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // 9. MAIN LOOPS
-// -----------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 
 void loop() {
-  // --- Audio Buffer Output ---
+  // --- Audio Buffer Output --
   audio_buffer_t *buf = take_audio_buffer(producer_pool, true);
   if (buf) {
     fill_audio_buffer(buf);
@@ -446,7 +459,13 @@ void loop() {
 
 void loop1() {
   usb_midi.read();
+
+unsigned long currentMillis = millis();
+
+ if (currentMillis - previousMillis >= 2) {
+  previousMillis = currentMillis;
+      Matrix_scan(); // Add this line to process touch matrix events
+
+}
+
 } // Closes loop1()
-// -----------------------------------------------------------------------------
-// 10. END OF FILE
-// -----------------------------------------------------------------------------
