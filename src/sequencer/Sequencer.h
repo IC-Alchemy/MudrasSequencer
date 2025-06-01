@@ -77,7 +77,7 @@ public:
 
   // Set note for a step
   void setStepNote(uint8_t stepIdx, uint8_t note);
-
+void setStepVelocity(uint8_t stepIdx, uint8_t velocity);
   // Set full step data (overloads)
   void setStep(int index, bool gate, bool slide, int note, float velocity, float filter);
   void setStep(int index, const Step& stepData);
@@ -88,28 +88,29 @@ public:
   const Step &getStep(uint8_t stepIdx) const;
   uint8_t getPlayhead() const;
   bool isRunning() const;
-
+  
 public:
-    int8_t getLastNote() const;
-    void setLastNote(int8_t note);
+  int8_t getLastNote() const;
+  void setLastNote(int8_t note);
 
 const SequencerState& getState() const;
 void triggerEnvelope();
-    void releaseEnvelope();
+  void releaseEnvelope();
+
 
 private:
-    // Sequencer state now stored in SequencerState from SequencerDefs.h
-    void resetState();
-    void initializeSteps();
-    bool validateState() const;
-    SequencerState state;
-    bool errorFlag = false;
+  // Sequencer state now stored in SequencerState from SequencerDefs.h
+  void resetState();
+  void initializeSteps();
+  bool validateState() const;
+  SequencerState state;
+  bool errorFlag = false;
 
-    /**
-     * @brief Tracks the last played MIDI note for proper noteOff handling.
-   * Stores the actual MIDI note value sent. -1 means no note is currently playing.
-     */
-    int8_t lastNote = -1;
+  /**
+   * @brief Tracks the last played MIDI note for proper noteOff handling.
+ * Stores the actual MIDI note value sent. -1 means no note is currently playing.
+   */
+  int8_t lastNote = -1;
 };
 
 #endif // SEQUENCER_H

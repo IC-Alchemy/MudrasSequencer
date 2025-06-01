@@ -254,6 +254,16 @@ void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
     // Serial.print("  - Step "); Serial.print(stepIdx);
     // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);
 }
+
+void Sequencer::setStepVelocity(uint8_t stepIdx, uint8_t velocity) {
+    if (stepIdx >= SEQUENCER_NUM_STEPS) {
+        // Serial.println("  - Invalid step index. Returning.");
+        return;
+    }
+    state.steps[stepIdx].velocity = velocity;
+    // Serial.print("  - Step "); Serial.print(stepIdx);
+    // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);
+}
 /**
  * @brief Set full step data using individual parameters.
  */
@@ -337,3 +347,4 @@ void Sequencer::setLastNote(int8_t note) { lastNote = note; }
 const SequencerState& Sequencer::getState() const {
     return state;
 }
+
