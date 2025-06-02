@@ -31,12 +31,12 @@
 #include "src/sequencer/Sequencer.h"
 
 // --- Display (OLED) ---
-#include "Adafruit_VL53L0X.h"
+#include <Melopero_VL53L1X.h>
+
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <SPI.h>
 #include <Wire.h>
-
 
 // --- MIDI & USB ---
 #include <Adafruit_TinyUSB.h>
@@ -45,19 +45,21 @@
 
 // --- Touch Matrix ---
 #include "src/matrix/Matrix.h"
-#include <Adafruit_MPR121.h> // https://github.com/adafruit/Adafruit_MPR121_Library>
+#include <Adafruit_MPR121.h>  // https://github.com/adafruit/Adafruit_MPR121_Library
 
 // -----------------------------------------------------------------------------
 // 2. CONSTANTS & GLOBALS
 // -----------------------------------------------------------------------------
 //  Distance Sensor
-Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 int raw_mm = 0;
 int mm = 0;
+Melopero_VL53L1X sensor;
 
 // --- I2S Pin Configuration ---
 #define PICO_AUDIO_I2S_DATA_PIN 15
 #define PICO_AUDIO_I2S_CLOCK_PIN_BASE 16
+#define IRQ_PIN 1
+// Adafruit_VL53L1X vl53 = Adafruit_VL53L1X(0, IRQ_PIN); // Unused variable, consider removing
 
 // --- OLED Display ---
 #define SCREEN_WIDTH 128
@@ -67,20 +69,21 @@ int mm = 0;
 #define OLED_DC 12
 #define OLED_CS 13
 #define OLED_RESET 9
-#define NOTE_LENGTH    4 // min: 1 max: 23 DO NOT EDIT BEYOND!!! 12 = 50% on 96ppqn, same as original
-    // tb303. 62.5% for triplets time signature
+#define NOTE_LENGTH \
+  4  // min: 1 max: 23 DO NOT EDIT BEYOND!!! 12 = 50% on 96ppqn, same as original \
+     // tb303. 62.5% for triplets time signature
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, OLED_MOSI, OLED_CLK,
                          OLED_DC, OLED_RESET, OLED_CS);
 
 // --- Sequencer ---
 Sequencer seq;
-volatile uint8_t sequencer_display_page = 0; // 0 = Note Page, 1 = Gate Page
+volatile uint8_t sequencer_display_page = 0;  // 0 = Note Page, 1 = Gate Page
 
 // --- MIDI & Clock ---
 Adafruit_USBD_MIDI raw_usb_midi;
 midi::SerialMIDI<Adafruit_USBD_MIDI> serial_usb_midi(raw_usb_midi);
 midi::MidiInterface<midi::SerialMIDI<Adafruit_USBD_MIDI>>
-    usb_midi(serial_usb_midi);
+  usb_midi(serial_usb_midi);
 uint8_t bpm_blink_timer = 1;
 
 // --- Touch Matrix ---
@@ -93,28 +96,38 @@ volatile bool trig1, trig2, trigenv1, trigenv2, dualEnvFlag;
 volatile bool buttonEventFlag = false;
 volatile uint8_t buttonEventIndex = 0;
 volatile uint8_t buttonEventType = 0;
+volatile uint8_t mmNote = 0;
+volatile uint8_t mmVelocity = 0;
 // Add button state tracking variables
 bool button16Held = false;
 bool button17Held = false;
 
-int scale[7][24] = {
-    {0,  2,  4,  5,  7,  9,  11, 12, 14, 16, 17, 19,
-     21, 23, 24, 26, 28, 29, 31, 33, 35, 36, 36, 36}, //  Major
-    {0,  2,  3,  5,  7,  8,  11, 12, 14, 15, 17, 19,
-     20, 23, 24, 26, 27, 29, 31, 32, 35, 36, 36, 36}, //  Harmonic Minor
-    {0,  2,  4,  5,  7,  9,  10, 12, 14, 16, 17, 19,
-     21, 22, 24, 26, 28, 29, 31, 33, 34, 36, 36, 36}, //  Mixolydian
-    {0,  0,  3,  3,  5,  5,  7,  7,  10, 10, 12, 12,
-     15, 15, 17, 17, 19, 19, 22, 22, 24, 24, 27, 29}, //  minor penta  doubled
-    {0,  2,  3,  5,  7,  8,  10, 12, 14, 15, 17, 19,
-     20, 22, 24, 26, 27, 29, 31, 32, 34, 36, 36, 36},
-    {0,  2,  4,  6,  8,  10, 12, 14, 16, 18, 20, 22,
-     24, 26, 28, 30, 32, 34, 36, 38, 38, 38, 38, 38}, //  whole tone
-    {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11,
-     12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23} //  Chromatic
+int scale[7][48] = {
+  { 0, 2, 4, 5, 7, 9, 10, 12, 14, 16, 17, 19,
+    21, 22, 24, 26, 28, 29, 31, 33, 34, 36, 38, 40,
+    41, 43, 45, 46, 48, 50, 52, 53, 55, 57, 58, 60,
+    62, 64, 65, 67, 69, 70, 72, 72, 72, 72, 72, 72 },  //  Mixolydian
 
+  { 0, 0, 3, 3, 5, 5, 7, 7, 10, 10, 12, 12,
+    15, 15, 17, 17, 19, 19, 22, 22, 24, 24, 27, 29,
+    29, 29, 32, 32, 34, 34, 36, 36, 39, 39, 41, 41,
+    43, 43, 46, 46, 48, 48, 51, 53, 53, 53, 53, 53 },  //  minor penta doubled
+
+  { 0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19,
+    20, 22, 24, 26, 27, 29, 31, 32, 34, 36, 38, 39,
+    41, 43, 44, 46, 48, 50, 51, 53, 55, 56, 58, 60,
+    62, 63, 65, 67, 68, 70, 72, 72, 72, 72, 72, 72 },
+
+  { 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22,
+    24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46,
+    48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70,
+    72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72 },  //  whole tone
+
+  { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+    12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+    24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+    36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47 }  //  Chromatic
 };
-
 // --- Audio & Synth ---
 constexpr float SAMPLE_RATE = 44100.0f;
 constexpr float OSC_SUM_SCALING = 0.1f;
@@ -122,7 +135,7 @@ constexpr float INT16_MAX_AS_FLOAT = 32767.0f;
 constexpr float INT16_MIN_AS_FLOAT = -32768.0f;
 constexpr int NUM_AUDIO_BUFFERS = 3;
 constexpr int SAMPLES_PER_BUFFER = 256;
-float baseFreq = 110.0f; // Hz
+float baseFreq = 110.0f;  // Hz
 constexpr float OSC_DETUNE_FACTOR = 1.01f;
 
 // --- Oscillators & Envelopes ---
@@ -134,7 +147,7 @@ audio_buffer_pool_t *producer_pool = nullptr;
 
 // --- Timing ---
 unsigned long previousMillis = 0;
-const long interval = 1; // ms
+const long interval = 1;  // ms
 
 // -----------------------------------------------------------------------------
 // 3. UTILITY FUNCTIONS
@@ -151,6 +164,7 @@ static inline int16_t convertSampleToInt16(float sample) {
   return static_cast<int16_t>(scaled);
 }
 
+
 // -----------------------------------------------------------------------------
 // 4. DISPLAY: OLED SEQUENCER VISUALIZATION
 // -----------------------------------------------------------------------------
@@ -160,10 +174,10 @@ void initOLED() {
   // --- OLED Display ---
   if (!display.begin(SSD1306_SWITCHCAPVCC)) {
     for (;;)
-      ; // Display initialization failed, halt
+      ;  // Display initialization failed, halt
   }
   display.clearDisplay();
-  display.setTextSize(1); // Normal 1:1 pixel scale
+  display.setTextSize(1);  // Normal 1:1 pixel scale
 
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
@@ -179,47 +193,34 @@ void drawSequencerOLED(const SequencerState &seqState) {
 
   // Layout: 8 steps per row
   const uint8_t steps_per_row = 8;
-  const uint8_t row_height = 16;    // pixels between rows
-  const uint8_t note_y_offset = 8;  // vertical offset for first row (note page)
-  const uint8_t gate_y_offset = 14; // vertical offset for first row (gate page)
-  const uint8_t underline_y_offset = 20; // y position for playhead underline
+  const uint8_t row_height = 16;          // pixels between rows
+  const uint8_t note_y_offset = 8;        // vertical offset for first row (note page)
+  const uint8_t gate_y_offset = 14;       // vertical offset for first row (gate page)
+  const uint8_t underline_y_offset = 20;  // y position for playhead underline
 
   // Calculate playhead position in grid
   uint8_t playhead_row = seqState.playhead / steps_per_row;
   uint8_t playhead_col = seqState.playhead % steps_per_row;
-  int playhead_x = playhead_col * 16; // wider cell for numbers/circles
+  int playhead_x = playhead_col * 16;  // wider cell for numbers/circles
   int playhead_y = (sequencer_display_page == 0)
-                       ? (note_y_offset + playhead_row * row_height + 10)
-                       : (gate_y_offset + playhead_row * row_height + 8);
+                     ? (note_y_offset + playhead_row * row_height + 10)
+                     : (gate_y_offset + playhead_row * row_height + 8);
 
   // Draw playhead underline (under the correct step)
   display.drawLine(playhead_x, playhead_y, playhead_x + 15, playhead_y,
                    SSD1306_WHITE);
 
-  if (sequencer_display_page == 0) {
-    // Note Page: show only MIDI note numbers, 8 per row
-    for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
-      uint8_t row = i / steps_per_row;
-      uint8_t col = i % steps_per_row;
-      int x = col * 16;
-      int y = note_y_offset + row * row_height;
-      display.setCursor(x, y);
-      display.print(seqState.steps[i].note);
-    }
-    display.setCursor(0, 56);
-    display.print("Page: Note");
-  } else {
-    // Gate Page: show only gate state (● = ON, ○ = OFF), 8 per row
-    for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
-      uint8_t row = i / steps_per_row;
-      uint8_t col = i % steps_per_row;
-      int x = col * 16 + 7;
-      int y = gate_y_offset + row * row_height;
-      if (seqState.steps[i].gate)
-        display.fillCircle(x, y, 4, SSD1306_WHITE);
-      else
-        display.drawCircle(x, y, 4, SSD1306_WHITE);
-    }
+  // Gate Page: show only gate state (● = ON, ○ = OFF), 8 per row
+  for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
+    uint8_t row = i / steps_per_row;
+    uint8_t col = i % steps_per_row;
+    int x = col * 16 + 7;
+    int y = gate_y_offset + row * row_height;
+    if (seqState.steps[i].gate)
+      display.fillCircle(x, y, 4, SSD1306_WHITE);
+    else
+      display.drawCircle(x, y, 4, SSD1306_WHITE);
+
     display.setCursor(0, 56);
     display.print("Page: Gate");
   }
@@ -240,7 +241,7 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
   for (int i = 0; i < N; ++i) {
 
-    float freq =daisysp::mtof(note1)
+    float freq = daisysp::mtof(note1);
     osc1.SetFreq(freq);
     osc2.SetFreq(freq * 1.0032f);
     osc3.SetFreq(freq * .9995f);
@@ -304,70 +305,78 @@ void initOscillators() {
 // -----------------------------------------------------------------------------
 
 void matrixEventHandler(const MatrixButtonEvent &evt) {
-  Serial.print("[MATRIX] Event! Index: ");
-  Serial.print(evt.buttonIndex);
-  Serial.print(", Type: ");
-  Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" : "RELEASED");
+  //  Serial.print("[MATRIX] Event! Index: ");
+  // Serial.print(evt.buttonIndex);
+  // Serial.print(", Type: ");
+  //  Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" :
+  //  "RELEASED");
 
-  if (evt.buttonIndex < 16) { // Sequencer steps 0-15
+  if (evt.buttonIndex < 16) {  // Sequencer steps 0-15
     if (evt.type == MATRIX_BUTTON_PRESSED) {
       seq.toggleStep(evt.buttonIndex);
     }
-  } else  {
-   if (evt.type == MATRIX_BUTTON_PRESSED) {
-    switch (evt.buttonIndex) {
-    case 16: // Button 16
-    {
-              button16Held = true;
-      Serial.println("[MATRIX] Button 16 Note Pressed");
+  } else {
+    if (evt.type == MATRIX_BUTTON_PRESSED) {
+      switch (evt.buttonIndex) {
+        case 16:  // Button 16
+          {
+            button16Held = true;
+            Serial.println("[MATRIX] Button 16 Note Pressed");
+          }
+          break;
+        case 17:
+          {
+            Serial.println("[MATRIX] Button 17 Note Pressed ");
 
-     
-    } break;
-    case 17: 
-    {      Serial.println("[MATRIX] Button 16 Note Pressed ");
-
-              button17Held = true;
+            button17Held = true;
+          }
+          break;
+        // ... add cases for buttons 18 through 31 as needed ...
+        case 18:
+          {
+          }  // Button 18
+          // record DetuneAmt to current Step based on variable mm from distance
+          // sensor
+          break;
+        case 32:
+          {
+          }  // Button 32
+          // Handle button 32 press
+          Serial.println("[MATRIX] Button 32 Pressed");
+          break;
+        default:
+          {
+          }  // Handle other button presses (if any beyond 32)
+          //  Serial.print("[MATRIX] Unhandled Button Pressed: ");
+          // Serial.println(evt.buttonIndex);
+          break;
+      }
 
     }
-      break;
-    // ... add cases for buttons 18 through 31 as needed ...
-    case 18: {}// Button 18
-      // record DetuneAmt to current Step based on variable mm from distance
-      // sensor
-      break;
-    case 32: {}// Button 32
-      // Handle button 32 press
-      Serial.println("[MATRIX] Button 32 Pressed");
-      break;
-    default:
-     {} // Handle other button presses (if any beyond 32)
-      Serial.print("[MATRIX] Unhandled Button Pressed: ");
-      Serial.println(evt.buttonIndex);
-      break;
-    }
-  
-  }
 
-  else if (evt.type == MATRIX_BUTTON_RELEASED) {
+    else if (evt.type == MATRIX_BUTTON_RELEASED) {
       if (evt.buttonIndex == 16) {
-              Serial.println("[MATRIX] Button 16 Note released");
+        Serial.println("[MATRIX] Button 16 Note released");
 
-          button16Held = false;
-}    if (evt.buttonIndex == 17) {
-          button17Held = false;
+        button16Held = false;
+      }
+      if (evt.buttonIndex == 17) {
+        button17Held = false;
+      }
+      drawSequencerOLED(
+        seq.getState());  // Update display on any relevant matrix event
+    }
+  }
 }
-  drawSequencerOLED(
-      seq.getState()); // Update display on any relevant matrix event
-}}}
-
-
 
 // -----------------------------------------------------------------------------
 // 7. MIDI & CLOCK HANDLERS
 // -----------------------------------------------------------------------------
 
-void ledOn() { /* Implement as needed */ }
-void ledOff() { /* Implement as needed */ }
+void ledOn() { /* Implement as needed */
+}
+void ledOff() { /* Implement as needed */
+}
 
 void handle_bpm_led(uint32_t tick) {
   // BPM led indicator
@@ -389,13 +398,13 @@ void onSync24Callback(uint32_t tick) {
 
 void onClockStart() {
   Serial.println("[uCLOCK] onClockStart() called.");
-  usb_midi.sendRealTime(midi::Start); // MIDI Start message
+  usb_midi.sendRealTime(midi::Start);  // MIDI Start message
   seq.start();
 }
 
 void onClockStop() {
   Serial.println("[uCLOCK] onClockStop() called.");
-  usb_midi.sendRealTime(midi::Stop); // MIDI Stop message
+  usb_midi.sendRealTime(midi::Stop);  // MIDI Stop message
   seq.stop();
 }
 
@@ -404,7 +413,7 @@ void onClockStop() {
  * note. Preserves rests, glide (if implemented), note length, and MIDI
  * handling.
  */
-void onStepCallback(uint32_t step) { // uClock provides the current step number
+void onStepCallback(uint32_t step) {  // uClock provides the current step number
   // Ensure the step value wraps to the sequencer's number of steps (0-15)
   uint8_t wrapped_step = static_cast<uint8_t>(step % SEQUENCER_NUM_STEPS);
 
@@ -414,19 +423,16 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
 
   seq.advanceStep(wrapped_step);
 
-  if (seq.getStep(wrapped_step).gate == true) 
-  {
-if (button16Held)
-    {seq.setStepNote(wrapped_step,mm)}
-  if (button17Held) 
-     {seq.setStepVelocity(wrapped_steptep,mm)} 
-  
-
+  if (seq.getStep(wrapped_step).gate == true) {
+    if (button16Held) {
+      seq.setStepNote(wrapped_step, mmNote);
+    }
+    if (button17Held) {
+      seq.setStepVelocity(wrapped_step, mmVelocity);
+    }
   }
 
- 
-
-  drawSequencerOLED(seq.getState()); // OLED is off
+  drawSequencerOLED(seq.getState());  // OLED is off
   // Serial.println("------------------------------------"); // Optional
   // separator for logs
 }
@@ -439,30 +445,29 @@ void setup() {
   // --- Synth & Envelope ---
   initOscillators();
 
-
   // --- I2S Output Initialization ---
-  static audio_format_t my_audio_format = {.sample_freq = (uint32_t)SAMPLE_RATE,
-                                           .format =
-                                               AUDIO_BUFFER_FORMAT_PCM_S16,
-                                           .channel_count = 2};
+  static audio_format_t my_audio_format = { .sample_freq = (uint32_t)SAMPLE_RATE,
+                                            .format =
+                                              AUDIO_BUFFER_FORMAT_PCM_S16,
+                                            .channel_count = 2 };
   static audio_buffer_format_t my_buffer_format = {
-      .format = &my_audio_format,
-      .sample_stride = 4 // 2 channels * 2 bytes
+    .format = &my_audio_format,
+    .sample_stride = 4  // 2 channels * 2 bytes
   };
   producer_pool = audio_new_producer_pool(&my_buffer_format, NUM_AUDIO_BUFFERS,
                                           SAMPLES_PER_BUFFER);
 
-  audio_i2s_config_t i2s_config = {.data_pin = PICO_AUDIO_I2S_DATA_PIN,
-                                   .clock_pin_base =
-                                       PICO_AUDIO_I2S_CLOCK_PIN_BASE,
-                                   .dma_channel = 0,
-                                   .pio_sm = 0};
+  audio_i2s_config_t i2s_config = { .data_pin = PICO_AUDIO_I2S_DATA_PIN,
+                                    .clock_pin_base =
+                                      PICO_AUDIO_I2S_CLOCK_PIN_BASE,
+                                    .dma_channel = 0,
+                                    .pio_sm = 0 };
   audio_i2s_setup(&my_audio_format, &i2s_config);
   audio_i2s_connect(producer_pool);
   audio_i2s_set_enabled(true);
 
   // --- Initial Envelope Triggers ---
-  trigenv1 = false; // Explicitly initialize envelope trigger flags
+  trigenv1 = false;  // Explicitly initialize envelope trigger flags
   trigenv2 = false;
 
   // --- Initial OLED Sequencer State ---
@@ -476,18 +481,38 @@ void setup1() {
   TinyUSB_Device_Init(0);
 #endif
 
-  // Initialize Serial for debugging AFTER TinyUSB is initialized.
-  // A small delay can sometimes help ensure the serial monitor is ready.
-  // delay(random(333));
-  //  Serial.println("Core 1: Setup1 starting. USB and Serial initialized.");
+
   delay(random(333));
-  // Seed the random number generator
   randomSeed(
-      analogRead(A0) +
-      millis()); // Use an unconnected analog pin and millis for better seed
-                 // Serial.println("Core 1: Random number generator seeded.");
-  initOLED();
-  // Initialize sequencer state BEFORE starting the clock that might use it
+    analogRead(A0) + millis());  // Use an unconnected analog pin and millis for better seed
+
+
+  //initOLED();
+
+ VL53L1_Error status = 0;
+  Wire.begin();                // use Wire1.begin() to use I2C-1
+  sensor.initI2C(0x29, Wire);  // use sensor.initI2C(0x29, Wire1); to use I2C-1
+
+  status = sensor.initSensor();
+
+  status = sensor.setDistanceMode(VL53L1_DISTANCEMODE_MEDIUM);
+
+  /*  Timing budget is the time required by the sensor to perform one range
+   *  measurement. The minimum and maximum timing budgets are [20 ms, 1000 ms]
+   */
+  status = sensor.setMeasurementTimingBudgetMicroSeconds(25000);
+
+  /*  Sets the inter-measurement period (the delay between two ranging
+   * operations) in milliseconds. The minimum inter-measurement period must be
+   * longer than the timing budget + 4 ms.*/
+  status = sensor.setInterMeasurementPeriodMilliSeconds(30);
+
+  // If the above constraints are not respected the status is -4:
+  // VL53L1_ERROR_INVALID_PARAMS
+
+  status = sensor.clearInterruptAndStartMeasurement();
+
+
   seq.init();
 
   usb_midi.begin(MIDI_CHANNEL_OMNI);
@@ -506,19 +531,10 @@ void setup1() {
   uClock.start();
   delay(45);
 
-  // Initialize distance sensor
-if (!distanceRead_init()) {
-Serial.println(F("Failed to initialize VL53L1X sensor"));
-delay(500);
- } else {
- Serial.println(F("VL53L1X sensor initialized successfully"));
-} 
-
-
   // Touch sensor
   if (!touchSensor.begin()) {
     Serial.println(
-        "Core 1: ERROR - MPR121 not found. Check wiring and I2C address!");
+      "Core 1: ERROR - MPR121 not found. Check wiring and I2C address!");
     while (1) {
       delay(55);
     }
@@ -527,10 +543,10 @@ delay(500);
   }
 
   Matrix_init(&touchSensor);
-  Matrix_setEventHandler(matrixEventHandler); // Register the event handler
+  Matrix_setEventHandler(matrixEventHandler);  // Register the event handler
 
   pinMode(PIN_TOUCH_IRQ, INPUT);
-  drawSequencerOLED(seq.getState());
+  // drawSequencerOLED(seq.getState());
 
   Serial.println("Core 1: Setup1 complete.");
 }
@@ -538,6 +554,16 @@ delay(500);
 // ------------------------------------------------------------------------
 // 9. MAIN LOOPS
 // --------------------------------------------------------------------------
+
+void update() {
+  sensor.waitMeasurementDataReady();   // wait for the data
+  sensor.getRangingMeasurementData();  // get the data
+  // the measurement data is stored in an instance variable:
+  // sensor.measurementData.RangeMilliMeter
+
+  sensor.clearInterruptAndStartMeasurement();
+  mm = sensor.measurementData.RangeMilliMeter;  // Starts a new measurement cycle
+}
 
 void loop() {
   // --- Audio Buffer Output --
@@ -554,33 +580,21 @@ void loop1() {
   unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= 1) {
+    update();
+
     previousMillis = currentMillis;
-    Matrix_scan(); // Add this line to process touch matrix events
-if (button16Held == true) {
-   
-///  if button16 is held then map current distance reading to mm to a scale index value      
- mm = map(distance, 0, 800, 0, 48);
-      
-      
-      }
+    Matrix_scan();  // Add this line to process touch matrix events
+    if (button16Held == true) {
 
+      ///  if button16 is held then map current distance reading to mm to a
+      ///  scale index value
+      mmNote = map(mm, 0, 900, 0, 48);
+    }
 
-
-if (button17Held == true) {
-      // if button17 is held then map current distance reading to mm to a velocity value
-   mm = map(distance, 0, 800, 0, 127);
-
-}
-   // We constantly read the distance and keep the value in memory, then use it for different things depending on which record button is held 
-int16_t distance = distanceRead_getDistance();
-    if (distance >= 0) {
-
-      mm=distance;
-     // Serial.print(F("Distance: "));
-     // Serial.print(distance);
-     // Serial.println(F(" mm"));
-}
+    if (button17Held == true) {
+      // if button17 is held then map current distance reading to mm to a
+      // velocity value
+      mmVelocity = map(mm, 0, 900, 0, 127);
+    }
   }
-
-
 }

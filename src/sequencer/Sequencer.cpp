@@ -15,7 +15,34 @@
 
 // Access global note1 and scale[] from main .ino
 extern volatile int note1;
-extern int scale[40];
+extern int scale[7][48]; = {
+    {0,  2,  4,  5,  7,  9,  10, 12, 14, 16, 17, 19,
+     21, 22, 24, 26, 28, 29, 31, 33, 34, 36, 38, 40,
+     41, 43, 45, 46, 48, 50, 52, 53, 55, 57, 58, 60,
+     62, 64, 65, 67, 69, 70, 72, 72, 72, 72, 72, 72}, //  Mixolydian
+
+    {0,  0,  3,  3,  5,  5,  7,  7,  10, 10, 12, 12,
+     15, 15, 17, 17, 19, 19, 22, 22, 24, 24, 27, 29,
+     29, 29, 32, 32, 34, 34, 36, 36, 39, 39, 41, 41,
+     43, 43, 46, 46, 48, 48, 51, 53, 53, 53, 53, 53}, //  minor penta doubled
+
+    {0,  2,  3,  5,  7,  8,  10, 12, 14, 15, 17, 19,
+     20, 22, 24, 26, 27, 29, 31, 32, 34, 36, 38, 39,
+     41, 43, 44, 46, 48, 50, 51, 53, 55, 56, 58, 60,
+     62, 63, 65, 67, 68, 70, 72, 72, 72, 72, 72, 72},
+
+    {0,  2,  4,  6,  8,  10, 12, 14, 16, 18, 20, 22,
+     24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46,
+     48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70,
+     72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72}, //  whole tone
+
+    {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11,
+     12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+     24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+     36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47}  //  Chromatic
+    };
+
+
 extern volatile bool trigenv1; // Used for triggering envelope
 extern volatile bool trigenv2; // Used for triggering envelope
 
@@ -67,7 +94,7 @@ void Sequencer::initializeSteps() {
     Serial.println("[SEQ] Initializing steps...");
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
         state.steps[i] = Step(); // Default initialization
-        state.steps[i].note = random(0, SEQUENCER_NUM_STEPS - 2); 
+        state.steps[i].note = 48;
 
         state.steps[i].gate = true; // All gates off initially
             // Serial.print("  Step "); Serial.print(i);
@@ -77,10 +104,7 @@ void Sequencer::initializeSteps() {
             // Serial.print(": OFF, Note Index: "); Serial.println(state.steps[i].note);
         
     }
-            state.steps[0].note = 0;
-        state.steps[4].note = 3;
-        state.steps[8].note = 5;
-        state.steps[12].note = 8;
+    
 }
 
 
@@ -173,7 +197,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
         if (scaleIndex >= SCALE_ARRAY_SIZE) { // Defensive check
             scaleIndex = 0; 
         }
-        int new_midi_note = MIDI_BASE_NOTE + scale[scaleIndex];
+        int new_midi_note = MIDI_BASE_NOTE + scale[][scaleIndex];
 
         // Update the synth engine's target note (global variable).
         note1 = new_midi_note;
