@@ -412,12 +412,19 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
   //  Serial.print(step); Serial.print(", wrapped step for sequencer: ");
   //  Serial.println(wrapped_step);
 
-  seq.advanceStep(wrapped_step); // Pass the wrapped step to the sequencer
+  seq.advanceStep(wrapped_step);
 
-  // DEBUG: Check the state of trigenv1 and note1 AFTER advanceStep
-  //  Serial.print("  [SEQ_OUT] Step: "); Serial.print(wrapped_step);
-  // Serial.print(", trigenv1: "); Serial.print(trigenv1 ? "ON" : "OFF");
-  // Serial.print(", note1: "); Serial.println(note1);
+  if (seq.getStep(wrapped_step).gate == true) 
+  {
+if (button16Held)
+    {seq.setStepNote(wrapped_step,mm)}
+  if (button17Held) 
+     {seq.setStepVelocity(wrapped_steptep,mm)} 
+  
+
+  }
+
+ 
 
   drawSequencerOLED(seq.getState()); // OLED is off
   // Serial.println("------------------------------------"); // Optional
@@ -550,49 +557,30 @@ void loop1() {
     previousMillis = currentMillis;
     Matrix_scan(); // Add this line to process touch matrix events
 if (button16Held == true) {
-// Read distance from sensor
-      int16_t distance = random(0, 800);
-      if (distance < 0) {
-        distance = 0; // Clamp negative to zero
+   
+///  if button16 is held then map current distance reading to mm to a scale index value      
+ mm = map(distance, 0, 800, 0, 48);
+      
+      
       }
-      if (distance > 800) {
-        distance = 800; // Clamp max to 800 mm
-      }
-      // Map 0-800 mm to 0-48 note range
-      int mappedNote = map(distance, 0, 800, 0, 48);
 
-      // Set the note to the current step (use evt.buttonIndex or another step
-      // index as needed) Here assuming current step is sequencer playhead
-      uint8_t currentStep = seq.getPlayhead();
-      seq.setStepNote(currentStep, mappedNote);
-      Serial.print(F("Mapped distance "));
-      Serial.print(distance);
-      Serial.print(F(" mm to note "));
-      Serial.println(mappedNote);
 
-}
 
 if (button17Held == true) {
-// Read distance from sensor
-      int16_t distance = random(0, 800);
-      if (distance < 0) {
-        distance = 0; // Clamp negative to zero
-      }
-      if (distance > 800) {
-        distance = 800; // Clamp max to 800 mm
-      }
-      // Map 0-800 mm to 0-48 note range
-      int mappedVelocity = map(distance, 0, 800, 0, 127);
-      uint8_t currentStep = seq.getPlayhead();
-      seq.setStepVelocity(currentStep, mappedVelocity);
+      // if button17 is held then map current distance reading to mm to a velocity value
+   mm = map(distance, 0, 800, 0, 127);
+
 }
-    // Read distance sensor and print value
-   /* int16_t distance = distanceRead_getDistance();
+   // We constantly read the distance and keep the value in memory, then use it for different things depending on which record button is held 
+int16_t distance = distanceRead_getDistance();
     if (distance >= 0) {
-      Serial.print(F("Distance: "));
-      Serial.print(distance);
-      Serial.println(F(" mm"));
-   */ }
+
+      mm=distance;
+     // Serial.print(F("Distance: "));
+     // Serial.print(distance);
+     // Serial.println(F(" mm"));
+}
   }
 
 
+}
