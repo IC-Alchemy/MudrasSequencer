@@ -102,7 +102,7 @@ volatile uint8_t mmVelocity = 0;
 bool button16Held = false;
 bool button17Held = false;
 
-int scale[7][48] = {
+int scale[5][48] = {
   { 0, 2, 4, 5, 7, 9, 10, 12, 14, 16, 17, 19,
     21, 22, 24, 26, 28, 29, 31, 33, 34, 36, 38, 40,
     41, 43, 45, 46, 48, 50, 52, 53, 55, 57, 58, 60,
