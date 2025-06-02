@@ -157,7 +157,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
     if (!state.running) {
         return;
     }
-
+        releaseEnvelope(); // Sets trigenv1 = false
     // Wrap step index to sequencer length
  state.playhead = current_uclock_step;
     Step &currentStep = state.steps[state.playhead];
@@ -194,6 +194,8 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
 
         lastNote = new_midi_note; // Update lastNote to the currently playing MIDI note.
     } else {
+
+
            // Current step's gate is OFF (a rest).
         // The MIDI Note Off for any previously sounding note was handled above.
         releaseEnvelope(); // Sets trigenv1 = false

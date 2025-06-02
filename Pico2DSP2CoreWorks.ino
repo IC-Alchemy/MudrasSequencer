@@ -239,9 +239,11 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
   int16_t *out = reinterpret_cast<int16_t *>(buffer->buffer->bytes);
 
   for (int i = 0; i < N; ++i) {
-    osc1.SetFreq(daisysp::mtof(note1));
-    osc2.SetFreq(daisysp::mtof(note1) * 1.0032f);
-    osc3.SetFreq(daisysp::mtof(note1) * .9975f);
+
+    float freq =daisysp::mtof(note1)
+    osc1.SetFreq(freq);
+    osc2.SetFreq(freq * 1.0032f);
+    osc3.SetFreq(freq * .9995f);
     // osc4.SetFreq(daisysp::mtof(note1 ));
 
     float current_out1 = env1.Process(trigenv1);
@@ -317,12 +319,14 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
     case 16: // Button 16
     {
               button16Held = true;
+      Serial.println("[MATRIX] Button 16 Note Pressed");
 
      
     } break;
     case 17: 
-    {
-              button117Held = true;
+    {      Serial.println("[MATRIX] Button 16 Note Pressed ");
+
+              button17Held = true;
 
     }
       break;
@@ -346,6 +350,8 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
 
   else if (evt.type == MATRIX_BUTTON_RELEASED) {
       if (evt.buttonIndex == 16) {
+              Serial.println("[MATRIX] Button 16 Note released");
+
           button16Held = false;
 }    if (evt.buttonIndex == 17) {
           button17Held = false;
@@ -494,11 +500,12 @@ void setup1() {
   delay(45);
 
   // Initialize distance sensor
- // if (!distanceRead_init()) {
-  //  Serial.println(F("Failed to initialize VL53L1X sensor"));
- // } else {
- //  Serial.println(F("VL53L1X sensor initialized successfully"));
-  //} 
+if (!distanceRead_init()) {
+Serial.println(F("Failed to initialize VL53L1X sensor"));
+delay(500);
+ } else {
+ Serial.println(F("VL53L1X sensor initialized successfully"));
+} 
 
 
   // Touch sensor
