@@ -138,7 +138,7 @@ constexpr float OSC_DETUNE_FACTOR = 1.01f;
 // --- Oscillators & Envelopes ---
 daisysp::Oscillator osc1, osc2, osc3, osc4, osc5, osc6, osc7, osc8;
 daisysp::Adsr env1, env2;
-
+daisysp::LadderFilter filter; 
 // --- Audio Buffer Pool ---
 audio_buffer_pool_t *producer_pool = nullptr;
 
@@ -245,13 +245,13 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
     float current_out1 = env1.Process(trigenv1);
     float current_out2 = env2.Process(trigenv2);
-
+filter.SetFreq(50.f+3500.f*current_out1);
     float osc111 = osc1.Process();
     float osc222 = osc2.Process();
     float osc333 = osc3.Process();
     // float osc444 = osc4.Process();
+float out=filter.Process( (osc111 + osc222 + osc333));
 
-    float out1 = (osc111 + osc222 + osc333) * current_out1;
     // float out2 = (osc333 + osc444) * current_out2;
     float sumL = out1 * 0.5f;
     float sumR = out1 * 0.5f;
@@ -278,7 +278,11 @@ void initOscillators() {
   // //osc8.Init(SAMPLE_RATE);
   env1.Init(SAMPLE_RATE);
   env2.Init(SAMPLE_RATE);
-
+filter.Init(SAMPLE_RATE);
+filter.SetFreq(1000.f);
+filter.SetRes(0.7f);
+filter.SetInputDrive(2.5f);
+filter.SetPassbandGain(0.25f);
   env1.SetReleaseTime(.061f);
   env1.SetAttackTime(0.0016f);
   env2.SetAttackTime(0.001f);

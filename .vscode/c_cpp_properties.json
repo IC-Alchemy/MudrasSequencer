@@ -2,10 +2,10 @@
   "version": 4,
   "configurations": [
     {
-      "name": "windows-gcc-x64",
+      "name": "gcc-arm",
       "compilerPath": "gcc",
       "compilerArgs": [],
-      "intelliSenseMode": "windows-gcc-x64",
+      "intelliSenseMode": "clang-arm",
       "includePath": [
         "${workspaceFolder}/**"
       ],
@@ -34,8 +34,8 @@
         "-fdata-sections",
         "-fno-exceptions"
       ],
-      "intelliSenseMode": "gcc-x64",
-      "includePath": [
+      "intelliSenseMode": "gcc-arm",
+      "includePath": [  "${workspaceFolder}/**",
         "C:\\Users\\Blasto\\AppData\\Local\\Arduino15\\packages\\rp2040\\hardware\\rp2040\\4.5.2\\include",
         "C:\\Users\\Blasto\\AppData\\Local\\Arduino15\\packages\\rp2040\\hardware\\rp2040\\4.5.2\\cores\\rp2040",
         "C:\\Users\\Blasto\\AppData\\Local\\Arduino15\\packages\\rp2040\\hardware\\rp2040\\4.5.2\\variants\\generic_rp2350",

@@ -1,11 +1,10 @@
 {
-  "C_Cpp.errorSquiggles": "disabled",
-  "C_Cpp_Runner.msvcBatchPath": "",
-  "C_Cpp_Runner.cCompilerPath": "gcc",
-  "C_Cpp_Runner.cppCompilerPath": "g++",
-  "C_Cpp_Runner.debuggerPath": "gdb",
-  "C_Cpp_Runner.cStandard": "",
-  "C_Cpp_Runner.cppStandard": "",
+  "C_Cpp.errorSquiggles": "enabled",
+  "C_Cpp_Runner.cCompilerPath": "arm-none-eabi-gcc",
+  "C_Cpp_Runner.cppCompilerPath": "arm-none-eabi-g++",
+  "C_Cpp_Runner.debuggerPath": "arm-none-eabi-gdb",
+  "C_Cpp_Runner.cStandard": "c11",
+  "C_Cpp_Runner.cppStandard": "c++17",
   "C_Cpp_Runner.useMsvc": false,
   "C_Cpp_Runner.warnings": [
     "-Wall",
@@ -36,9 +35,31 @@
   ],
   "C_Cpp_Runner.enableWarnings": true,
   "C_Cpp_Runner.warningsAsError": false,
-  "C_Cpp_Runner.compilerArgs": [],
-  "C_Cpp_Runner.linkerArgs": [],
-  "C_Cpp_Runner.includePaths": [],
+  "C_Cpp_Runner.compilerArgs": [
+    "-mcpu=cortex-m0plus",
+    "-mthumb",
+    "-DARDUINO_ARCH_RP2040",
+    "-DARDUINO_PICO",
+    "-DARDUINO=10805"
+  ],
+  "C_Cpp_Runner.linkerArgs": [
+    "-mcpu=cortex-m0plus",
+    "-mthumb"
+  ],
+  "C_Cpp_Runner.includePaths": [
+    "${workspaceFolder}/src",
+    "${workspaceFolder}/src/audio",
+    "${workspaceFolder}/src/dsp",
+    "${workspaceFolder}/src/matrix",
+    "${workspaceFolder}/src/sequencer",
+    "${workspaceFolder}/src/encoders",
+    "${workspaceFolder}/src/gate",
+    "${workspaceFolder}/src/audio",
+    "${workspaceFolder}/src/audio/include",
+    "${workspaceFolder}/.pio/libdeps/raspberry-pi-pico",
+    "C:/Users/Blasto/Documents/Arduino/hardware/raspberrypi/1.14.0/cores/rp2040",
+    "C:/Users/Blasto/Documents/Arduino/hardware/raspberrypi/1.14.0/variants/pico"
+  ],
   "C_Cpp_Runner.includeSearch": [
     "*",
     "**/*"
@@ -56,5 +77,22 @@
   "C_Cpp_Runner.useLeakSanitizer": false,
   "C_Cpp_Runner.showCompilationTime": false,
   "C_Cpp_Runner.useLinkTimeOptimization": false,
-  "C_Cpp_Runner.msvcSecureNoWarnings": false
+  "C_Cpp_Runner.msvcSecureNoWarnings": false,
+  "C_Cpp.default.includePath": [
+    "${workspaceFolder}/src",
+    "${workspaceFolder}/src/audio",
+    "${workspaceFolder}/src/dsp",
+    "${workspaceFolder}/src/matrix",
+    "${workspaceFolder}/src/sequencer",
+    "${workspaceFolder}/src/encoders",
+    "${workspaceFolder}/src/gate",
+    "C:/Users/Blasto/Documents/Arduino/hardware/raspberrypi/1.14.0/cores/rp2040",
+    "C:/Users/Blasto/Documents/Arduino/hardware/raspberrypi/1.14.0/variants/pico"
+  ],
+  "C_Cpp.default.cppStandard": "c++17",
+  "C_Cpp.default.cStandard": "c11",
+  "C_Cpp.default.intelliSenseMode": "gcc-arm",
+  "files.associations": {
+    "*.ino": "cpp"
+  }
 }
