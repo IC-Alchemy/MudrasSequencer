@@ -22,11 +22,12 @@
 #include "src/audio/audio_i2s.h"
 #include "src/audio/audio_pins.h"
 #include "src/dsp/adsr.h"
+#include "src/dsp/ladder.h"
 #include "src/dsp/oscillator.h"
 #include "src/dsp/phasor.h"
 #include <cmath>
 #include <cstdint>
-#include "src/dsp/ladder.h"
+
 #warning "ladder.h included"
 
 // --- Sequencer ---
@@ -55,6 +56,7 @@
 //  Distance Sensor
 int raw_mm = 0;
 int mm = 0;
+int mmNote=7,mmVelocity=50,mmFiltFreq=2222;
 Melopero_VL53L1X sensor;
 
 // --- I2S Pin Configuration ---
@@ -93,15 +95,15 @@ uint8_t bpm_blink_timer = 1;
 const int PIN_TOUCH_IRQ = 6;
 Adafruit_MPR121 touchSensor = Adafruit_MPR121();
 
-// --- Multicore Communication ---
-volatile int note1 = 48, note2 = 48,freq1=1000;
+// --- Multicore Counication ---
+volatile int note1 = 48, note2 = 48;
 volatile bool trig1, trig2, trigenv1, trigenv2, dualEnvFlag;
 volatile bool buttonEventFlag = false;
 volatile uint8_t buttonEventIndex = 0;
 volatile uint8_t buttonEventType = 0;
-volatile uint8_t mmNote = 0;
-volatile uint8_t mmVelocity = 0;
-volatile float mmFiltFreq = 0.0f;
+volatile uint8_t Note = 0;
+volatile float vel1 = 0;
+volatile float freq1 = 0.0f;
 // Add button state tracking variables
 bool button16Held = false;
 bool button17Held = false;
@@ -142,7 +144,7 @@ constexpr float OSC_DETUNE_FACTOR = 1.01f;
 // --- Oscillators & Envelopes ---
 daisysp::Oscillator osc1, osc2, osc3, osc4, osc5, osc6, osc7, osc8;
 daisysp::Adsr env1, env2;
-daisysp::LadderFilter filter; 
+daisysp::LadderFilter filter;
 // --- Audio Buffer Pool ---
 audio_buffer_pool_t *producer_pool = nullptr;
 
@@ -227,7 +229,14 @@ void drawSequencerOLED(const SequencerState &seqState) {
 
   display.display();
 }
+float applyFilterFrequency(float targetFreq) {
+  static float currentFreq = 0.0f;
+  const float smoothingAlpha = 0.1f;
 
+  currentFreq =
+      smoothingAlpha * targetFreq + (1.0f - smoothingAlpha) * currentFreq;
+  return currentFreq;
+}
 // -----------------------------------------------------------------------------
 // 5. AUDIO: SYNTHESIS & BUFFER FILLING
 // -----------------------------------------------------------------------------
@@ -243,14 +252,14 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
     float freq = daisysp::mtof(note1);
     osc1.SetFreq(freq);
-    osc2.SetFreq(freq * 1.0012f);
-    osc3.SetFreq(freq * .995f);
+    osc2.SetFreq(freq * 1.003f);
+    osc3.SetFreq(freq * .997f);
     // osc4.SetFreq(daisysp::mtof(note1 ));
 
     float current_out1 = env1.Process(trigenv1);
     float current_out2 = env2.Process(trigenv2);
 filter.SetFreq(50.f+5000.f*current_out1);
-    float osc111 = osc1.Process();
+   float osc111 = osc1.Process();
     float osc222 = osc2.Process();
     float osc333 = osc3.Process();
     // float osc444 = osc4.Process();
@@ -282,18 +291,18 @@ void initOscillators() {
   // //osc8.Init(SAMPLE_RATE);
   env1.Init(SAMPLE_RATE);
   env2.Init(SAMPLE_RATE);
-filter.Init(SAMPLE_RATE);
-filter.SetFreq(1000.f);
-filter.SetRes(0.7f);
-filter.SetInputDrive(2.5f);
-filter.SetPassbandGain(0.25f);
-  env1.SetReleaseTime(.051f);
-  env1.SetAttackTime(0.0086f);
+  filter.Init(SAMPLE_RATE);
+  filter.SetFreq(1000.f);
+  filter.SetRes(0.6f);
+  filter.SetInputDrive(2.5f);
+  filter.SetPassbandGain(0.25f);
+  env1.SetReleaseTime(.11f);
+  env1.SetAttackTime(0.0226f);
   env2.SetAttackTime(0.001f);
   env1.SetDecayTime(0.05f);
   env2.SetDecayTime(0.121f);
-  env1.SetSustainLevel(0.f);
-  env2.SetSustainLevel(0.f);
+  env1.SetSustainLevel(0.3f);
+  env2.SetSustainLevel(0.3f);
   env2.SetReleaseTime(0.03f);
 
   // Set initial waveform for all oscillators
@@ -325,21 +334,21 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
       case 16: // Button 16
       {
         button16Held = true;
-       // Serial.println("[MATRIX] Button 16 Note Pressed");
+        // Serial.println("[MATRIX] Button 16 Note Pressed");
       } break;
       case 17: {
-     //   Serial.println("[MATRIX] Button 17 Velocity Pressed ");
+        //   Serial.println("[MATRIX] Button 17 Velocity Pressed ");
 
         button17Held = true;
       } break;
-      
+
       case 18: {
-       // Serial.println("[MATRIX] Button 17 FilterFreq Pressed ");
+        // Serial.println("[MATRIX] Button 17 FilterFreq Pressed ");
 
         button18Held = true;
       } break;
-      // ... add cases for buttons 18 through 31 as needed ...
-      
+        // ... add cases for buttons 18 through 31 as needed ...
+
       case 32: {
       } // Button 32
         // Handle button 32 press
@@ -485,10 +494,9 @@ void setup() {
 
 void setup1() {
   Serial.begin(115200);
-   Serial.print(
-        " CORE1 SETUP1 ... ");
-        delay(200);
-        Serial.println("..");
+  Serial.print(" CORE1 SETUP1 ... ");
+  delay(200);
+  Serial.println("..");
   delay(50);
 #if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
   // Initialize TinyUSB stack. This should be done once, early, on the core
@@ -514,20 +522,18 @@ void setup1() {
   status = sensor.clearInterruptAndStartMeasurement();
 
   seq.init();
-   Serial.print(
-        " ...Distance Sensor Initialized... ");
-                delay(200);
-Serial.println("..");
+  Serial.print(" ...Distance Sensor Initialized... ");
+  delay(200);
+  Serial.println("..");
   delay(50);
   usb_midi.begin(MIDI_CHANNEL_OMNI);
-Serial.println("..");
+  Serial.println("..");
   delay(50);
   // Initialize builtin led for clock timer blinking
   // (Implement initBlinkLed() as needed)
   // initBlinkLed();
-   Serial.print(
-        " ...USB MIDI is Rockin!.... ");
-                delay(200);
+  Serial.print(" ...USB MIDI is Rockin!.... ");
+  delay(200);
   // Setup clock system
   uClock.init();
   uClock.setOnSync24(onSync24Callback);
@@ -537,15 +543,13 @@ Serial.println("..");
   uClock.setTempo(90);
   uClock.start();
   delay(45);
- Serial.print(
-        " ...uClock is GOOD.... ");
-                delay(200);
+  Serial.print(" ...uClock is GOOD.... ");
+  delay(200);
   // Touch sensor
   Serial.println("..");
   delay(50);
   if (!touchSensor.begin()) {
-    Serial.print(
-        " ... ERROR - MPR121 not found... ");
+    Serial.print(" ... ERROR - MPR121 not found... ");
     while (1) {
       delay(55);
     }
@@ -565,13 +569,15 @@ Serial.println("..");
 }
 
 // ------------------------------------------------------------------------
-// 9. MAIN LOOPS
+ // 9. MAIN LOOPS
 // --------------------------------------------------------------------------
 
 void update() {
   sensor.waitMeasurementDataReady();  // wait for the data
   sensor.getRangingMeasurementData(); // get the data
   // the measurement data is stored in an instance variable:
+// Forward declaration for audio loop CPU usage reporting
+void monitorCPUUsageLoop(uint32_t activeMicros);
   // sensor.measurementData.RangeMilliMeter
 
   sensor.clearInterruptAndStartMeasurement();
@@ -580,6 +586,7 @@ void update() {
 
 void loop() {
   // --- Audio Buffer Output --
+  uint32_t activeStart = micros();
   audio_buffer_t *buf = take_audio_buffer(producer_pool, true);
   if (buf) {
     fill_audio_buffer(buf);
@@ -601,17 +608,22 @@ void loop1() {
 
       ///  if button16 is held then map current distance reading to mm to a
       ///  scale index value
+
       mmNote = map(mm, 0, 1400, 0, 36);
     }
 
     if (button17Held == true) {
       // if button17 is held then map current distance reading to mm to a
       // velocity value
+
       mmVelocity = map(mm, 0, 1400, 0, 127);
-    }if (button18Held == true) {
-      // if button17 is held then map current distance reading to mm to a
+    }
+    if (button18Held == true) {
+      // if button17 is held then map current distance reading to
       // velocity value
-      mmFiltFreq = map(mm, 0, 1400, 0, 2000);
+
+      mmFiltFreq = map(mm, 0, 1400, 0, 5000);
     }
   }
+
 }

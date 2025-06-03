@@ -18,6 +18,7 @@
 // Access global note1 and scale[] from main .ino
 extern volatile int note1;
 extern volatile float freq1;
+extern volatile float vel1;
 extern int scale[5][48]; 
 
 extern volatile bool trigenv1; // Used for triggering envelope
@@ -190,10 +191,11 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
         if (midiVelocity > 127) midiVelocity = 127;
 
 // Send MIDI Note On for the current step's note.
-        // usb_midi.sendNoteOn(new_midi_note, midiVelocity, 1); // Channel 1
-
+        usb_midi.sendNoteOn(new_midi_note, midiVelocity, 1); // Channel 1
+vel1=currentStep.velocity;
         // Optionally: apply currentStep.filter to synth engine here
         // Optionally: apply currentStep.filter to synth engine here
+    freq1 = currentStep.filter*1.f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
 
         lastNote = new_midi_note; // Update lastNote to the currently playing MIDI note.
     } else {
@@ -204,6 +206,31 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
         releaseEnvelope(); // Sets trigenv1 = false
         lastNote = -1;     // No MIDI note is actively sounding from the sequencer.     
     }
+}
+/**
+ * @brief Instantly play a step for real-time feedback (does not advance playhead).
+ */
+void Sequencer::playStepNow(uint8_t stepIdx) {
+    if (stepIdx >= SEQUENCER_NUM_STEPS) return;
+    Step &currentStep = state.steps[stepIdx];
+
+    // Clamp note index to scale size
+    uint8_t scaleIndex = (currentStep.note >= scaleSize) ? 0 : currentStep.note;
+    if (scaleIndex >= SCALE_ARRAY_SIZE) scaleIndex = 0;
+    int new_midi_note = MIDI_BASE_NOTE + scale[0][scaleIndex];
+
+    // Update the synth engine's target note (global variable).
+    note1 = new_midi_note;
+
+    // Optionally set velocity and filter globals if needed
+    // (Assuming Velocity and FiltFreq are global variables used in audio rendering)
+    extern volatile uint8_t Velocity;
+    extern volatile float FiltFreq;
+    Velocity = static_cast<uint8_t>(currentStep.velocity * 127.0f);
+    FiltFreq = currentStep.filter * 5000.0f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
+
+    // Trigger the envelope for instant feedback
+    triggerEnvelope();
 }
 
 /**

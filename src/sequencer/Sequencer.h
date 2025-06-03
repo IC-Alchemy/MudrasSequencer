@@ -44,6 +44,9 @@ class Sequencer {
 public:
   Sequencer();
 
+  // Instantly play a step for real-time feedback (does not advance playhead)
+  void playStepNow(uint8_t stepIdx);
+
   /**
    * @brief Initialize the sequencer to a known good state.
    *
