@@ -73,7 +73,7 @@ void Sequencer::initializeSteps() {
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
         state.steps[i] = Step(); // Default initialization
         state.steps[i].note = 0;
-        state.steps[i].filter = 0.5f; // Default filter value as float
+        state.steps[i].filter = 0.5f; // Default filter value as float (matches SequencerDefs.h change)
 
         state.steps[i].gate = true; // All gates off initially
             // Serial.print("  Step "); Serial.print(i);
@@ -287,14 +287,12 @@ void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
     // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);
 }
 
-void Sequencer::setStepVelocity(uint8_t stepIdx, uint8_t velocity) {
+void Sequencer::setStepVelocity(uint8_t stepIdx, uint8_t velocityByte) { // velocityByte is 0-127
     if (stepIdx >= SEQUENCER_NUM_STEPS) {
-        // Serial.println("  - Invalid step index. Returning.");
         return;
     }
-    state.steps[stepIdx].velocity = velocity;
-    // Serial.print("  - Step "); Serial.print(stepIdx);
-    // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);
+    // Convert 0-127 byte to 0.0f-1.0f float
+    state.steps[stepIdx].velocity = static_cast<float>(velocityByte) / 127.0f;
 }
 void Sequencer::setStepFiltFreq(uint8_t stepIdx, float filter) {
  

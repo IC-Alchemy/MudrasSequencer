@@ -50,10 +50,13 @@
 #include "src/matrix/Matrix.h"
 #include <Adafruit_MPR121.h> // https://github.com/adafruit/Adafruit_MPR121_Library
 
-// -----------------------------------------------------------------------------
+ // -----------------------------------------------------------------------------
 // 2. CONSTANTS & GLOBALS
 // -----------------------------------------------------------------------------
-//  Distance Sensor
+
+// --- Step Selection & Pad Timing ---
+int selectedStepForEdit = -1; // -1 means no step selected
+ //  Distance Sensor
 int raw_mm = 0;
 int mm = 0;
 int mmNote=7,mmVelocity=50,mmFiltFreq=2222;
@@ -318,62 +321,81 @@ void initOscillators() {
 // -----------------------------------------------------------------------------
 
 void matrixEventHandler(const MatrixButtonEvent &evt) {
-  //  Serial.print("[MATRIX] Event! Index: ");
-  // Serial.print(evt.buttonIndex);
-  // Serial.print(", Type: ");
-  //  Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" :
-  //  "RELEASED");
+  // Debug: Print all matrix events
+  Serial.print("[MATRIX] Event! Index: ");
+  Serial.print(evt.buttonIndex);
+  Serial.print(", Type: ");
+  Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" : "RELEASED");
 
-  if (evt.buttonIndex < 16) { // Sequencer steps 0-15
+  // Use a static array for timing, only for pads 0-15, scoped to this function
+  static unsigned long padPressTimestamps[16] = {0};
+
+  if (evt.buttonIndex < 16) { // Sequencer steps 0-15 (Voice 1)
     if (evt.type == MATRIX_BUTTON_PRESSED) {
-      seq.toggleStep(evt.buttonIndex);
+      padPressTimestamps[evt.buttonIndex] = millis();
+    } else if (evt.type == MATRIX_BUTTON_RELEASED) {
+      unsigned long pressDuration = millis() - padPressTimestamps[evt.buttonIndex];
+      if (pressDuration < 400) {
+        // Single tap: toggle gate state
+        seq.toggleStep(evt.buttonIndex);
+        Serial.print("[MATRIX] Step ");
+        Serial.print(evt.buttonIndex);
+        Serial.println(" gate toggled (single tap).");
+      } else {
+        // Long press: select step for parameter editing
+        if (selectedStepForEdit != evt.buttonIndex) {
+          selectedStepForEdit = evt.buttonIndex;
+          Serial.print("[MATRIX] Step ");
+          Serial.print(evt.buttonIndex);
+          Serial.println(" selected for editing (long press).");
+        } else {
+          // Already selected, do nothing
+          Serial.print("[MATRIX] Step ");
+          Serial.print(evt.buttonIndex);
+          Serial.println(" long-pressed (already selected).");
+        }
+      }
+      drawSequencerOLED(seq.getState());
     }
   } else {
     if (evt.type == MATRIX_BUTTON_PRESSED) {
       switch (evt.buttonIndex) {
-      case 16: // Button 16
-      {
+      case 16: // Button 16 (Note)
         button16Held = true;
-        // Serial.println("[MATRIX] Button 16 Note Pressed");
-      } break;
-      case 17: {
-        //   Serial.println("[MATRIX] Button 17 Velocity Pressed ");
-
-        button17Held = true;
-      } break;
-
-      case 18: {
-        // Serial.println("[MATRIX] Button 17 FilterFreq Pressed ");
-
-        button18Held = true;
-      } break;
-        // ... add cases for buttons 18 through 31 as needed ...
-
-      case 32: {
-      } // Button 32
-        // Handle button 32 press
-        Serial.println("[MATRIX] Button 32 Pressed");
+        Serial.println("[MATRIX] Button 16 (Note) held.");
         break;
-      default: {
-      } // Handle other button presses (if any beyond 32)
-      //  Serial.print("[MATRIX] Unhandled Button Pressed: ");
-      // Serial.println(evt.buttonIndex);
-      break;
+      case 17: // Button 17 (Velocity)
+        button17Held = true;
+        Serial.println("[MATRIX] Button 17 (Velocity) held.");
+        break;
+      case 18: // Button 18 (Filter)
+        button18Held = true;
+        Serial.println("[MATRIX] Button 18 (Filter) held.");
+        break;
+      // Add param4 or other parameter buttons here if needed
+      default:
+        Serial.print("[MATRIX] Unhandled Button Pressed: ");
+        Serial.println(evt.buttonIndex);
+        break;
       }
-
-    }
-
-    else if (evt.type == MATRIX_BUTTON_RELEASED) {
-      if (evt.buttonIndex == 16) {
-        Serial.println("[MATRIX] Button 16 Note released");
-
+    } else if (evt.type == MATRIX_BUTTON_RELEASED) {
+      switch (evt.buttonIndex) {
+      case 16:
         button16Held = false;
-      }
-      if (evt.buttonIndex == 17) {
+        Serial.println("[MATRIX] Button 16 (Note) released.");
+        break;
+      case 17:
         button17Held = false;
+        Serial.println("[MATRIX] Button 17 (Velocity) released.");
+        break;
+      case 18:
+        button18Held = false;
+        Serial.println("[MATRIX] Button 18 (Filter) released.");
+        break;
+      default:
+        break;
       }
-      drawSequencerOLED(
-          seq.getState()); // Update display on any relevant matrix event
+      drawSequencerOLED(seq.getState());
     }
   }
 }
@@ -384,6 +406,13 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
 
 void ledOn() { /* Implement as needed */ }
 void ledOff() { /* Implement as needed */ }
+
+// --- LED Matrix Control Stub ---
+// Replace this stub with your actual per-step RGB LED control implementation.
+void setStepLedColor(uint8_t step, uint8_t r, uint8_t g, uint8_t b) {
+  // Example: send color to hardware for the given step index.
+  // This is a stub for integration with your LED hardware.
+}
 
 void handle_bpm_led(uint32_t tick) {
   // BPM led indicator
@@ -430,16 +459,8 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
 
   seq.advanceStep(wrapped_step);
 
-  if (seq.getStep(wrapped_step).gate == true) {
-    if (button16Held) {
-      seq.setStepNote(wrapped_step, mmNote);
-    }
-    if (button17Held) {
-      seq.setStepVelocity(wrapped_step, mmVelocity);
-    }if (button18Held) {
-      seq.setStepFiltFreq(wrapped_step, mmFiltFreq);
-    }
-  }
+  // Parameter editing is now handled in loop1() for the selected step.
+  // No parameter editing here to avoid conflicts.
 
   drawSequencerOLED(seq.getState()); // OLED is off
   // Serial.println("------------------------------------"); // Optional
@@ -577,7 +598,6 @@ void update() {
   sensor.getRangingMeasurementData(); // get the data
   // the measurement data is stored in an instance variable:
 // Forward declaration for audio loop CPU usage reporting
-void monitorCPUUsageLoop(uint32_t activeMicros);
   // sensor.measurementData.RangeMilliMeter
 
   sensor.clearInterruptAndStartMeasurement();
@@ -586,7 +606,6 @@ void monitorCPUUsageLoop(uint32_t activeMicros);
 
 void loop() {
   // --- Audio Buffer Output --
-  uint32_t activeStart = micros();
   audio_buffer_t *buf = take_audio_buffer(producer_pool, true);
   if (buf) {
     fill_audio_buffer(buf);
@@ -604,26 +623,74 @@ void loop1() {
 
     previousMillis = currentMillis;
     Matrix_scan(); // Add this line to process touch matrix events
-    if (button16Held == true) {
-
-      ///  if button16 is held then map current distance reading to mm to a
-      ///  scale index value
-
-      mmNote = map(mm, 0, 1400, 0, 36);
-    }
-
-    if (button17Held == true) {
-      // if button17 is held then map current distance reading to mm to a
-      // velocity value
-
-      mmVelocity = map(mm, 0, 1400, 0, 127);
-    }
-    if (button18Held == true) {
-      // if button17 is held then map current distance reading to
-      // velocity value
-
-      mmFiltFreq = map(mm, 0, 1400, 0, 5000);
+    // --- Parameter Editing Logic for Selected Step ---
+    if (selectedStepForEdit != -1) {
+      // --- Real-time Parameter Editing for Selected Step ---
+      // PITCH_BUTTON (Pad 16)
+      if (button16Held) {
+        mmNote = map(mm, 0, 1400, 0, 36); // Map Lidar to scale index or MIDI note
+        seq.setStepNote(selectedStepForEdit, mmNote);
+        Serial.print("[PARAM] Step ");
+        Serial.print(selectedStepForEdit);
+        Serial.print(" note set to ");
+        Serial.println(mmNote);
+      }
+      // VELOCITY_BUTTON (Pad 17)
+      if (button17Held) {
+        mmVelocity = map(mm, 0, 1400, 0, 127); // Map Lidar to velocity
+        seq.setStepVelocity(selectedStepForEdit, mmVelocity);
+        Serial.print("[PARAM] Step ");
+        Serial.print(selectedStepForEdit);
+        Serial.print(" velocity set to ");
+        Serial.println(mmVelocity);
+      }
+      // FILTER_BUTTON (Pad 18)
+      if (button18Held) {
+        mmFiltFreq = map(mm, 0, 1400, 0, 5000); // Map Lidar to filter cutoff (Hz)
+        seq.setStepFiltFreq(selectedStepForEdit, mmFiltFreq);
+        Serial.print("[PARAM] Step ");
+        Serial.print(selectedStepForEdit);
+        Serial.print(" filter freq set to ");
+        Serial.println(mmFiltFreq);
+      }
+      // PARAM4_BUTTON (Pad index TBD)
+      // Example: if (button19Held) { /* map and set param4 here */ }
+      // Placeholder for custom parameter 4
     }
   }
 
+  // --- LED Pulsing Cyan Feedback for Selected Step ---
+  static int lastSelectedStep = -1;
+  static bool ledWasActive = false;
+
+  if (selectedStepForEdit != -1) {
+    // Check if selected step is currently playing and gate is ON
+    bool isPlayhead = (seq.getState().playhead == selectedStepForEdit);
+    bool gateOn = seq.getStep(selectedStepForEdit).gate;
+
+    if (isPlayhead && gateOn) {
+      // Gate state indication should override cyan pulse (example: white)
+      setStepLedColor((uint8_t)selectedStepForEdit, 255, 255, 255);
+      // Debug
+      // Serial.println("[LED] Selected step is playhead and gate is ON: white.");
+    } else {
+      // Smooth pulse: sine wave, 1.5 Hz
+      float t = millis() / 1000.0f;
+      float pulse = 0.5f * (1.0f + sinf(2.0f * 3.1415926f * 1.5f * t)); // 0..1
+      uint8_t brightness = (uint8_t)(pulse * 255.0f);
+
+      // Cyan: (0, brightness, brightness)
+      setStepLedColor((uint8_t)selectedStepForEdit, 0, brightness, brightness);
+      // Debug
+      // Serial.println("[LED] Selected step LED pulsing cyan.");
+    }
+
+    lastSelectedStep = selectedStepForEdit;
+    ledWasActive = true;
+  } else if (ledWasActive && lastSelectedStep != -1) {
+    // Turn off or restore LED when deselected
+    setStepLedColor((uint8_t)lastSelectedStep, 0, 0, 0);
+    ledWasActive = false;
+    lastSelectedStep = -1;
+  }
 }
