@@ -78,6 +78,7 @@ public:
   // Set note for a step
   void setStepNote(uint8_t stepIdx, uint8_t note);
 void setStepVelocity(uint8_t stepIdx, uint8_t velocity);
+void setStepFiltFreq(uint8_t stepIdx, float filter);
   // Set full step data (overloads)
   void setStep(int index, bool gate, bool slide, int note, float velocity, float filter);
   void setStep(int index, const Step& stepData);

@@ -37,13 +37,13 @@ struct Step {
   bool slide = false;     // Slide ON (true) or OFF (false)
   int note = 0;           // Note value, 0-24
   float velocity = 0.5f;  // Velocity, 0.0f - 1.0f
-  float filter = 0.0f;    // Filter value, 0.0f - 1.0f
+  int filter = 0;    // Filter value, 0.0f - 1.0f
 
   // Default constructor initializes to sensible defaults
   Step() = default;
 
   // Parameterized constructor for convenience
-  Step(bool g, bool s, int n, float v, float f)
+  Step(bool g, bool s, int n, float v, int f)
       : gate(g), slide(s), note(n), velocity(v), filter(f) {}
 };
 

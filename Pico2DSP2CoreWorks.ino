@@ -26,6 +26,8 @@
 #include "src/dsp/phasor.h"
 #include <cmath>
 #include <cstdint>
+#include "src/dsp/ladder.h"
+#warning "ladder.h included"
 
 // --- Sequencer ---
 #include "src/sequencer/Sequencer.h"
@@ -92,16 +94,18 @@ const int PIN_TOUCH_IRQ = 6;
 Adafruit_MPR121 touchSensor = Adafruit_MPR121();
 
 // --- Multicore Communication ---
-volatile int note1 = 48, note2 = 48, note3 = 48, note4 = 48, note5 = 48;
+volatile int note1 = 48, note2 = 48,freq1=1000;
 volatile bool trig1, trig2, trigenv1, trigenv2, dualEnvFlag;
 volatile bool buttonEventFlag = false;
 volatile uint8_t buttonEventIndex = 0;
 volatile uint8_t buttonEventType = 0;
 volatile uint8_t mmNote = 0;
 volatile uint8_t mmVelocity = 0;
+volatile float mmFiltFreq = 0.0f;
 // Add button state tracking variables
 bool button16Held = false;
 bool button17Held = false;
+bool button18Held = false;
 
 int scale[5][48] = {
     {0,  2,  4,  5,  7,  9,  10, 12, 14, 16, 17, 19, 21, 22, 24, 26, 28,
@@ -239,18 +243,18 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
     float freq = daisysp::mtof(note1);
     osc1.SetFreq(freq);
-    osc2.SetFreq(freq * 1.0032f);
-    osc3.SetFreq(freq * .9995f);
+    osc2.SetFreq(freq * 1.0012f);
+    osc3.SetFreq(freq * .995f);
     // osc4.SetFreq(daisysp::mtof(note1 ));
 
     float current_out1 = env1.Process(trigenv1);
     float current_out2 = env2.Process(trigenv2);
-filter.SetFreq(50.f+3500.f*current_out1);
+filter.SetFreq(50.f+5000.f*current_out1);
     float osc111 = osc1.Process();
     float osc222 = osc2.Process();
     float osc333 = osc3.Process();
     // float osc444 = osc4.Process();
-float out=filter.Process( (osc111 + osc222 + osc333));
+float out1=filter.Process( (osc111 + osc222 + osc333));
 
     // float out2 = (osc333 + osc444) * current_out2;
     float sumL = out1 * 0.5f;
@@ -283,10 +287,10 @@ filter.SetFreq(1000.f);
 filter.SetRes(0.7f);
 filter.SetInputDrive(2.5f);
 filter.SetPassbandGain(0.25f);
-  env1.SetReleaseTime(.061f);
-  env1.SetAttackTime(0.0016f);
+  env1.SetReleaseTime(.051f);
+  env1.SetAttackTime(0.0086f);
   env2.SetAttackTime(0.001f);
-  env1.SetDecayTime(0.121f);
+  env1.SetDecayTime(0.05f);
   env2.SetDecayTime(0.121f);
   env1.SetSustainLevel(0.f);
   env2.SetSustainLevel(0.f);
@@ -321,19 +325,21 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
       case 16: // Button 16
       {
         button16Held = true;
-        Serial.println("[MATRIX] Button 16 Note Pressed");
+       // Serial.println("[MATRIX] Button 16 Note Pressed");
       } break;
       case 17: {
-        Serial.println("[MATRIX] Button 17 Note Pressed ");
+     //   Serial.println("[MATRIX] Button 17 Velocity Pressed ");
 
         button17Held = true;
       } break;
-      // ... add cases for buttons 18 through 31 as needed ...
+      
       case 18: {
-      } // Button 18
-      // record DetuneAmt to current Step based on variable mm from distance
-      // sensor
-      break;
+       // Serial.println("[MATRIX] Button 17 FilterFreq Pressed ");
+
+        button18Held = true;
+      } break;
+      // ... add cases for buttons 18 through 31 as needed ...
+      
       case 32: {
       } // Button 32
         // Handle button 32 press
@@ -421,6 +427,8 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
     }
     if (button17Held) {
       seq.setStepVelocity(wrapped_step, mmVelocity);
+    }if (button18Held) {
+      seq.setStepFiltFreq(wrapped_step, mmFiltFreq);
     }
   }
 
@@ -552,7 +560,6 @@ Serial.println("..");
 
   pinMode(PIN_TOUCH_IRQ, INPUT);
   // drawSequencerOLED(seq.getState());
-
   Serial.println("Core 1: Setup1 complete.");
   delay(500);
 }
@@ -601,6 +608,10 @@ void loop1() {
       // if button17 is held then map current distance reading to mm to a
       // velocity value
       mmVelocity = map(mm, 0, 1400, 0, 127);
+    }if (button18Held == true) {
+      // if button17 is held then map current distance reading to mm to a
+      // velocity value
+      mmFiltFreq = map(mm, 0, 1400, 0, 2000);
     }
   }
 }

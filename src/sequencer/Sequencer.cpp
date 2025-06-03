@@ -12,9 +12,12 @@
 
 #include "Sequencer.h"
 #include <Arduino.h>
+#include <cstdint>
+#include <stdlib.h> // for random()
 
 // Access global note1 and scale[] from main .ino
 extern volatile int note1;
+extern volatile float freq1;
 extern int scale[5][48]; 
 
 extern volatile bool trigenv1; // Used for triggering envelope
@@ -65,10 +68,11 @@ void Sequencer::resetState() {
  * Note is initialized to a random scale index.
  */
 void Sequencer::initializeSteps() {
-    Serial.println("[SEQ] Initializing steps...");
+    // Serial output removed due to missing Serial definition
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
         state.steps[i] = Step(); // Default initialization
-        state.steps[i].note = 48;
+        state.steps[i].note = 0;
+        state.steps[i].filter = 0.5f; // Default filter value as float
 
         state.steps[i].gate = true; // All gates off initially
             // Serial.print("  Step "); Serial.print(i);
@@ -160,7 +164,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
  state.playhead = current_uclock_step;
     Step &currentStep = state.steps[state.playhead];
     if (lastNote >= 0) {
-        usb_midi.sendNoteOff(lastNote, 0, 1); // Channel 1, velocity 0
+        // usb_midi.sendNoteOff(lastNote, 0, 1); // Channel 1, velocity 0
     }
 
     
@@ -176,6 +180,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
         // Update the synth engine's target note (global variable).
         note1 = new_midi_note;
 
+
         // Trigger the envelope. This will cause re-articulation on every gated step.
         // If slide/legato functionality were implemented, this call would be conditional.
         triggerEnvelope(); // Sets trigenv1 = true
@@ -185,7 +190,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
         if (midiVelocity > 127) midiVelocity = 127;
 
 // Send MIDI Note On for the current step's note.
-        usb_midi.sendNoteOn(new_midi_note, midiVelocity, 1); // Channel 1
+        // usb_midi.sendNoteOn(new_midi_note, midiVelocity, 1); // Channel 1
 
         // Optionally: apply currentStep.filter to synth engine here
         // Optionally: apply currentStep.filter to synth engine here
@@ -264,24 +269,34 @@ void Sequencer::setStepVelocity(uint8_t stepIdx, uint8_t velocity) {
     // Serial.print("  - Step "); Serial.print(stepIdx);
     // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);
 }
+void Sequencer::setStepFiltFreq(uint8_t stepIdx, float filter) {
+ 
+    if (stepIdx >= SEQUENCER_NUM_STEPS) {
+        // Serial.println("  - Invalid step index. Returning.");
+        return;
+    }
+    state.steps[stepIdx].filter = filter;
+    // Serial.print("  - Step "); Serial.print(stepIdx);
+    // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);
+}
 /**
  * @brief Set full step data using individual parameters.
  */
 void Sequencer::setStep(int index, bool gate, bool slide, int note, float velocity, float filter) {
     if (index < 0 || index >= SEQUENCER_NUM_STEPS) {
-        Serial.println("Sequencer::setStep: Step index out of range.");
+        // Serial.println("Sequencer::setStep: Step index out of range.");
         return;
     }
     if (note < 0 || note > 24) {
-        Serial.println("Sequencer::setStep: Note value out of range (0-24).");
+        // Serial.println("Sequencer::setStep: Note value out of range (0-24).");
         return;
     }
     if (velocity < 0.0f || velocity > 1.0f) {
-        Serial.println("Sequencer::setStep: Velocity value out of range (0.0f-1.0f).");
+        // Serial.println("Sequencer::setStep: Velocity value out of range (0.0f-1.0f).");
         return;
     }
     if (filter < 0.0f || filter > 1.0f) {
-        Serial.println("Sequencer::setStep: Filter value out of range (0.0f-1.0f).");
+        // Serial.println("Sequencer::setStep: Filter value out of range (0.0f-1.0f).");
         return;
     }
     state.steps[index].gate = gate;
@@ -296,19 +311,19 @@ void Sequencer::setStep(int index, bool gate, bool slide, int note, float veloci
  */
 void Sequencer::setStep(int index, const Step& stepData) {
     if (index < 0 || index >= SEQUENCER_NUM_STEPS) {
-        Serial.println("Sequencer::setStep: Step index out of range.");
+        // Serial.println("Sequencer::setStep: Step index out of range.");
         return;
     }
     if (stepData.note < 0 || stepData.note > 24) {
-        Serial.println("Sequencer::setStep: Note value in Step object out of range (0-24).");
+        // Serial.println("Sequencer::setStep: Note value in Step object out of range (0-24).");
         return;
     }
     if (stepData.velocity < 0.0f || stepData.velocity > 1.0f) {
-        Serial.println("Sequencer::setStep: Velocity value in Step object out of range (0.0f-1.0f).");
+        // Serial.println("Sequencer::setStep: Velocity value in Step object out of range (0.0f-1.0f).");
         return;
     }
     if (stepData.filter < 0.0f || stepData.filter > 1.0f) {
-        Serial.println("Sequencer::setStep: Filter value in Step object out of range (0.0f-1.0f).");
+        // Serial.println("Sequencer::setStep: Filter value in Step object out of range (0.0f-1.0f).");
         return;
     }
     state.steps[index] = stepData;
