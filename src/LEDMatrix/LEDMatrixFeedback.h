@@ -2,7 +2,7 @@
 #define LEDMATRIX_FEEDBACK_H
 
 #include "ledMatrix.h"
-#include "src/sequencer/Sequencer.h"
+#include "../sequencer/Sequencer.h"
 
 // Call this regularly (e.g., in loop1) to update step LEDs based on sequencer and UI state
 void updateStepLEDs(
