@@ -18,6 +18,9 @@
 // -----------------------------------------------------------------------------
 
 // --- Audio & DSP ---
+#include "src/LEDMatrix/LEDMatrixFeedback.h"
+#include "src/LEDMatrix/LEDmatrix.h"
+#include "src/LEDMatrix/ledMatrix.h"
 #include "src/audio/audio.h"
 #include "src/audio/audio_i2s.h"
 #include "src/audio/audio_pins.h"
@@ -36,6 +39,8 @@
 // --- Display (OLED) ---
 #include <Melopero_VL53L1X.h>
 
+#include <FastLED.h>
+
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <SPI.h>
@@ -50,16 +55,17 @@
 #include "src/matrix/Matrix.h"
 #include <Adafruit_MPR121.h> // https://github.com/adafruit/Adafruit_MPR121_Library
 
- // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // 2. CONSTANTS & GLOBALS
 // -----------------------------------------------------------------------------
+LEDMatrix ledMatrix;
 
 // --- Step Selection & Pad Timing ---
 int selectedStepForEdit = -1; // -1 means no step selected
- //  Distance Sensor
+                              //  Distance Sensor
 int raw_mm = 0;
 int mm = 0;
-int mmNote=7,mmVelocity=50,mmFiltFreq=2222;
+int mmNote = 7, mmVelocity = 50, mmFiltFreq = 2222;
 Melopero_VL53L1X sensor;
 
 // --- I2S Pin Configuration ---
@@ -215,20 +221,21 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
   for (int i = 0; i < N; ++i) {
 
-     // 1. Set Oscillator Frequencies based on note1 (from sequencer)
-    float osc_base_freq = daisysp::mtof(note1); // note1 is MIDI note from sequencer
+    // 1. Set Oscillator Frequencies based on note1 (from sequencer)
+    float osc_base_freq =
+        daisysp::mtof(note1); // note1 is MIDI note from sequencer
     osc1.SetFreq(osc_base_freq);
     osc2.SetFreq(osc_base_freq * 1.003f); // Slight detune
     osc3.SetFreq(osc_base_freq * 0.997f); // Slight detune
 
-    // 2. Process Amplitude Envelope (env1) based on trigenv1 (from sequencer gate)
-    // current_amp_env_value will be 0.0 to 1.0
+    // 2. Process Amplitude Envelope (env1) based on trigenv1 (from sequencer
+    // gate) current_amp_env_value will be 0.0 to 1.0
     float current_amp_env_value = env1.Process(trigenv1);
 
-    // 3. Set Filter Frequency based on freq1 (from sequencer step's filter value)
-    // freq1 is expected to be in Hz (e.g., 0-5000 Hz from Lidar mapping)
+    // 3. Set Filter Frequency based on freq1 (from sequencer step's filter
+    // value) freq1 is expected to be in Hz (e.g., 0-5000 Hz from Lidar mapping)
     // Ensure a minimum cutoff frequency.
-    float target_filter_freq = daisysp::fmax(20.f, freq1); 
+    float target_filter_freq = daisysp::fmax(20.f, freq1);
     filter.SetFreq(target_filter_freq);
 
     // 4. Generate and sum oscillator outputs
@@ -244,7 +251,6 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
     // 7. Scale for output (0.5f was the previous scaling factor)
     float sumL = final_audio_signal * 0.5f;
     float sumR = final_audio_signal * 0.5f;
-
 
     int16_t intSampleL = convertSampleToInt16(sumL);
     int16_t intSampleR = convertSampleToInt16(sumR);
@@ -310,7 +316,8 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
     if (evt.type == MATRIX_BUTTON_PRESSED) {
       padPressTimestamps[evt.buttonIndex] = millis();
     } else if (evt.type == MATRIX_BUTTON_RELEASED) {
-      unsigned long pressDuration = millis() - padPressTimestamps[evt.buttonIndex];
+      unsigned long pressDuration =
+          millis() - padPressTimestamps[evt.buttonIndex];
       if (pressDuration < 400) {
         // Single tap: toggle gate state
         seq.toggleStep(evt.buttonIndex);
@@ -448,7 +455,8 @@ void onClockStart() {
   Serial.println("[uCLOCK] onClockStart() called.");
   usb_midi.sendRealTime(midi::Start); // MIDI Start message
   seq.start();
-  seq.advanceStep(0); // Immediately trigger the first step so sound is produced at startup
+  seq.advanceStep(
+      0); // Immediately trigger the first step so sound is produced at startup
 }
 
 void onClockStop() {
@@ -458,12 +466,9 @@ void onClockStop() {
 }
 
 void seqStoppedMode() {
-if (!seq.isRunning()) {
-
-
+  if (!seq.isRunning()) {
+  }
 }
-}
-
 
 /**
  * Monophonic step callback: handles rest, note length, and MIDI for a single
@@ -485,15 +490,14 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
     seq.setStepNote(wrapped_step, mmNote);
     seq.setStepVelocity(wrapped_step, mmVelocity);
     seq.setStepFiltFreq(wrapped_step, mmFiltFreq);
-
   }
 
   // Parameter editing is now handled in loop1() for the selected step.
   // No parameter editing here to avoid conflicts.
 
   Serial.println("------------------------------------"); // Optional
-Serial.println("------------------------------------"); // Optional
-  // separator for logs
+  Serial.println("------------------------------------"); // Optional
+                                                          // separator for logs
 }
 
 // -----------------------------------------------------------------------------
@@ -543,8 +547,7 @@ void setup() {
 }
 
 void setup1() {
- 
- 
+
 #if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
   // Initialize TinyUSB stack. This should be done once, early, on the core
   // handling USB.
@@ -560,7 +563,7 @@ void setup1() {
 #ifndef DEBUG
   Serial.begin(115200);
   Serial.print(" CORE1 SETUP1 ... ");
-   delay(500);
+  delay(500);
 #endif
   VL53L1_Error status = 0;
   Wire.begin();               // use Wire1.begin() to use I2C-1
@@ -568,31 +571,17 @@ void setup1() {
 
   status = sensor.initSensor();
   status = sensor.setDistanceMode(VL53L1_DISTANCEMODE_MEDIUM);
-  status = sensor.setMeasurementTimingBudgetMicroSeconds(25000);
-  status = sensor.setInterMeasurementPeriodMilliSeconds(30);
+  status = sensor.setMeasurementTimingBudgetMicroSeconds(27000);
+  status = sensor.setInterMeasurementPeriodMilliSeconds(32);
   status = sensor.clearInterruptAndStartMeasurement();
 
-  seq.init();
-#ifndef DEBUG
-  Serial.print(" ...Distance Sensor Initialized... ");
-#endif
-  delay(200);
-#ifndef DEBUG
-  Serial.println("..");
-#endif
-  delay(50);
+  Matrix_init(&touchSensor);
+  Matrix_setEventHandler(matrixEventHandler); // Register the event handler
+
   usb_midi.begin(MIDI_CHANNEL_OMNI);
-#ifndef DEBUG
-  Serial.println("..");
-#endif
-  delay(50);
-  // Initialize builtin led for clock timer blinking
-  // (Implement initBlinkLed() as needed)
-  // initBlinkLed();
-#ifndef DEBUG
-  Serial.print(" ...USB MIDI is Rockin!.... ");
-#endif
-  delay(200);
+
+  pinMode(PIN_TOUCH_IRQ, INPUT);
+
   // Setup clock system
   uClock.init();
   uClock.setOnSync24(onSync24Callback);
@@ -602,15 +591,9 @@ void setup1() {
   uClock.setTempo(90);
   uClock.start();
   delay(45);
-#ifndef DEBUG
-  Serial.print(" ...uClock is GOOD.... ");
-#endif
-  delay(200);
+
   // Touch sensor
-#ifndef DEBUG
-  Serial.println("..");
-#endif
-  delay(50);
+
   if (!touchSensor.begin()) {
 #ifndef DEBUG
     Serial.print(" ... ERROR - MPR121 not found... ");
@@ -619,35 +602,30 @@ void setup1() {
       delay(55);
     }
   } else {
+
 #ifndef DEBUG
     Serial.print("... MPR121 is Rockin!....");
+    Serial.print(" ...uClock is GOOD.... ");
+    delay(345);
+    Serial.println("Core 1: Setup1 complete.");
+    delay(500);
+
 #endif
   }
-#ifndef DEBUG
-  Serial.println("..");
-#endif
-  delay(50);
+  seq.init();
 
-  Matrix_init(&touchSensor);
-  Matrix_setEventHandler(matrixEventHandler); // Register the event handler
-
-  pinMode(PIN_TOUCH_IRQ, INPUT);
-  // drawSequencerOLED(seq.getState());
-#ifndef DEBUG
-  Serial.println("Core 1: Setup1 complete.");
-#endif
-  delay(500);
+    ledMatrix.begin();
 }
 
 // ------------------------------------------------------------------------
- // 9. MAIN LOOPS
+// 9. MAIN LOOPS
 // --------------------------------------------------------------------------
 
 void update() {
   sensor.waitMeasurementDataReady();  // wait for the data
   sensor.getRangingMeasurementData(); // get the data
   // the measurement data is stored in an instance variable:
-// Forward declaration for audio loop CPU usage reporting
+  // Forward declaration for audio loop CPU usage reporting
   // sensor.measurementData.RangeMilliMeter
 
   sensor.clearInterruptAndStartMeasurement();
@@ -666,19 +644,25 @@ void loop() {
 void loop1() {
   usb_midi.read();
 
-  unsigned long currentMillis = millis();
+  unsigned long currentMillis1 = millis();
+  unsigned long currentMillis2 = millis();
 
-  if (currentMillis - previousMillis >= 1) {
+  if (currentMillis2 - previousMillis2 >= 20) {
+    updateStepLEDs(ledMatrix, seq, selectedStepForEdit, button16Held,
+                   button17Held, button18Held, recordButtonHeld, mm);
+  }
+  if (currentMillis1 - previousMillis1 >= 1) {
     update();
 
-    previousMillis = currentMillis;
+    previousMillis1 = currentMillis1;
     Matrix_scan(); // Add this line to process touch matrix events
     // --- Parameter Editing Logic for Selected Step ---
     if (selectedStepForEdit != -1) {
       // --- Real-time Parameter Editing for Selected Step ---
       // PITCH_BUTTON (Pad 16)
       if (button16Held) {
-        mmNote = map(mm, 0, 1400, 0, 36); // Map Lidar to scale index or MIDI note
+        mmNote =
+            map(mm, 0, 1400, 0, 36); // Map Lidar to scale index or MIDI note
         seq.setStepNote(selectedStepForEdit, mmNote);
 #ifndef DEBUG
         Serial.print("[PARAM] Step ");
@@ -700,7 +684,8 @@ void loop1() {
       }
       // FILTER_BUTTON (Pad 18)
       if (button18Held) {
-        mmFiltFreq = map(mm, 0, 1400, 0, 5000); // Map Lidar to filter cutoff (Hz)
+        mmFiltFreq =
+            map(mm, 0, 1400, 0, 5000); // Map Lidar to filter cutoff (Hz)
         seq.setStepFiltFreq(selectedStepForEdit, mmFiltFreq);
 #ifndef DEBUG
         Serial.print("[PARAM] Step ");
@@ -728,7 +713,8 @@ void loop1() {
       // Gate state indication should override cyan pulse (example: white)
       setStepLedColor((uint8_t)selectedStepForEdit, 255, 255, 255);
       // Debug
-      // Serial.println("[LED] Selected step is playhead and gate is ON: white.");
+      // Serial.println("[LED] Selected step is playhead and gate is ON:
+      // white.");
     } else {
       // Smooth pulse: sine wave, 1.5 Hz
       float t = millis() / 1000.0f;
