@@ -111,6 +111,7 @@ volatile float freq1 = 0.0f;
 bool button16Held = false;
 bool button17Held = false;
 bool button18Held = false;
+bool recordButtonHeld = false;
 
 int scale[5][48] = {
     {0,  2,  4,  5,  7,  9,  10, 12, 14, 16, 17, 19, 21, 22, 24, 26, 28,
@@ -192,46 +193,7 @@ void initOLED() {
   display.clearDisplay();
   display.display();
 }
-void drawSequencerOLED(const SequencerState &seqState) {
-  display.clearDisplay();
-  display.setTextSize(1);
 
-  // Layout: 8 steps per row
-  const uint8_t steps_per_row = 8;
-  const uint8_t row_height = 16;    // pixels between rows
-  const uint8_t note_y_offset = 8;  // vertical offset for first row (note page)
-  const uint8_t gate_y_offset = 14; // vertical offset for first row (gate page)
-  const uint8_t underline_y_offset = 20; // y position for playhead underline
-
-  // Calculate playhead position in grid
-  uint8_t playhead_row = seqState.playhead / steps_per_row;
-  uint8_t playhead_col = seqState.playhead % steps_per_row;
-  int playhead_x = playhead_col * 16; // wider cell for numbers/circles
-  int playhead_y = (sequencer_display_page == 0)
-                       ? (note_y_offset + playhead_row * row_height + 10)
-                       : (gate_y_offset + playhead_row * row_height + 8);
-
-  // Draw playhead underline (under the correct step)
-  display.drawLine(playhead_x, playhead_y, playhead_x + 15, playhead_y,
-                   SSD1306_WHITE);
-
-  // Gate Page: show only gate state (● = ON, ○ = OFF), 8 per row
-  for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
-    uint8_t row = i / steps_per_row;
-    uint8_t col = i % steps_per_row;
-    int x = col * 16 + 7;
-    int y = gate_y_offset + row * row_height;
-    if (seqState.steps[i].gate)
-      display.fillCircle(x, y, 4, SSD1306_WHITE);
-    else
-      display.drawCircle(x, y, 4, SSD1306_WHITE);
-
-    display.setCursor(0, 56);
-    display.print("Page: Gate");
-  }
-
-  display.display();
-}
 float applyFilterFrequency(float targetFreq) {
   static float currentFreq = 0.0f;
   const float smoothingAlpha = 0.1f;
@@ -253,24 +215,36 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
   for (int i = 0; i < N; ++i) {
 
-    float freq = daisysp::mtof(note1);
-    osc1.SetFreq(freq);
-    osc2.SetFreq(freq * 1.003f);
-    osc3.SetFreq(freq * .997f);
-    // osc4.SetFreq(daisysp::mtof(note1 ));
+     // 1. Set Oscillator Frequencies based on note1 (from sequencer)
+    float osc_base_freq = daisysp::mtof(note1); // note1 is MIDI note from sequencer
+    osc1.SetFreq(osc_base_freq);
+    osc2.SetFreq(osc_base_freq * 1.003f); // Slight detune
+    osc3.SetFreq(osc_base_freq * 0.997f); // Slight detune
 
-    float current_out1 = env1.Process(trigenv1);
-    float current_out2 = env2.Process(trigenv2);
-filter.SetFreq(50.f+5000.f*current_out1);
-   float osc111 = osc1.Process();
-    float osc222 = osc2.Process();
-    float osc333 = osc3.Process();
-    // float osc444 = osc4.Process();
-float out1=filter.Process( (osc111 + osc222 + osc333));
+    // 2. Process Amplitude Envelope (env1) based on trigenv1 (from sequencer gate)
+    // current_amp_env_value will be 0.0 to 1.0
+    float current_amp_env_value = env1.Process(trigenv1);
 
-    // float out2 = (osc333 + osc444) * current_out2;
-    float sumL = out1 * 0.5f;
-    float sumR = out1 * 0.5f;
+    // 3. Set Filter Frequency based on freq1 (from sequencer step's filter value)
+    // freq1 is expected to be in Hz (e.g., 0-5000 Hz from Lidar mapping)
+    // Ensure a minimum cutoff frequency.
+    float target_filter_freq = daisysp::fmax(20.f, freq1); 
+    filter.SetFreq(target_filter_freq);
+
+    // 4. Generate and sum oscillator outputs
+    float osc_sum = osc1.Process() + osc2.Process() + osc3.Process();
+
+    // 5. Process summed oscillators through the filter
+    float filtered_signal = filter.Process(osc_sum);
+
+    // 6. Apply amplitude envelope and step velocity to the filtered signal
+    // vel1 is 0.0 to 1.0 from sequencer step's velocity
+    float final_audio_signal = filtered_signal * current_amp_env_value * vel1;
+
+    // 7. Scale for output (0.5f was the previous scaling factor)
+    float sumL = final_audio_signal * 0.5f;
+    float sumR = final_audio_signal * 0.5f;
+
 
     int16_t intSampleL = convertSampleToInt16(sumL);
     int16_t intSampleR = convertSampleToInt16(sumR);
@@ -321,11 +295,13 @@ void initOscillators() {
 // -----------------------------------------------------------------------------
 
 void matrixEventHandler(const MatrixButtonEvent &evt) {
+#ifndef DEBUG
   // Debug: Print all matrix events
   Serial.print("[MATRIX] Event! Index: ");
   Serial.print(evt.buttonIndex);
   Serial.print(", Type: ");
   Serial.println(evt.type == MATRIX_BUTTON_PRESSED ? "PRESSED" : "RELEASED");
+#endif
 
   // Use a static array for timing, only for pads 0-15, scoped to this function
   static unsigned long padPressTimestamps[16] = {0};
@@ -338,21 +314,31 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
       if (pressDuration < 400) {
         // Single tap: toggle gate state
         seq.toggleStep(evt.buttonIndex);
+        bool gateState = seq.getStep(evt.buttonIndex).gate;
+#ifndef DEBUG
         Serial.print("[MATRIX] Step ");
         Serial.print(evt.buttonIndex);
-        Serial.println(" gate toggled (single tap).");
+        Serial.print(" gate toggled (single tap). New gate value: ");
+        Serial.println(gateState ? "ON" : "OFF");
+#endif
+        // Optionally, update OLED or UI here to reflect new gate state
       } else {
         // Long press: select step for parameter editing
         if (selectedStepForEdit != evt.buttonIndex) {
           selectedStepForEdit = evt.buttonIndex;
+#ifndef DEBUG
           Serial.print("[MATRIX] Step ");
           Serial.print(evt.buttonIndex);
           Serial.println(" selected for editing (long press).");
+#endif
         } else {
-          // Already selected, do nothing
+          // Already selected, deselect
+          selectedStepForEdit = -1;
+#ifndef DEBUG
           Serial.print("[MATRIX] Step ");
           Serial.print(evt.buttonIndex);
-          Serial.println(" long-pressed (already selected).");
+          Serial.println(" deselected (long press on already selected step).");
+#endif
         }
       }
       drawSequencerOLED(seq.getState());
@@ -362,35 +348,61 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
       switch (evt.buttonIndex) {
       case 16: // Button 16 (Note)
         button16Held = true;
+#ifndef DEBUG
         Serial.println("[MATRIX] Button 16 (Note) held.");
+#endif
         break;
       case 17: // Button 17 (Velocity)
         button17Held = true;
+#ifndef DEBUG
         Serial.println("[MATRIX] Button 17 (Velocity) held.");
+#endif
         break;
       case 18: // Button 18 (Filter)
         button18Held = true;
+#ifndef DEBUG
         Serial.println("[MATRIX] Button 18 (Filter) held.");
+#endif
+        break;
+      case 19: // Record button
+        recordButtonHeld = true;
+#ifndef DEBUG
+        Serial.println("[MATRIX] Record button held.");
+#endif
         break;
       // Add param4 or other parameter buttons here if needed
       default:
+#ifndef DEBUG
         Serial.print("[MATRIX] Unhandled Button Pressed: ");
         Serial.println(evt.buttonIndex);
+#endif
         break;
       }
     } else if (evt.type == MATRIX_BUTTON_RELEASED) {
       switch (evt.buttonIndex) {
       case 16:
         button16Held = false;
+#ifndef DEBUG
         Serial.println("[MATRIX] Button 16 (Note) released.");
+#endif
         break;
       case 17:
         button17Held = false;
+#ifndef DEBUG
         Serial.println("[MATRIX] Button 17 (Velocity) released.");
+#endif
         break;
       case 18:
         button18Held = false;
+#ifndef DEBUG
         Serial.println("[MATRIX] Button 18 (Filter) released.");
+#endif
+        break;
+      case 19:
+        recordButtonHeld = false;
+#ifndef DEBUG
+        Serial.println("[MATRIX] Record button released.");
+#endif
         break;
       default:
         break;
@@ -436,6 +448,7 @@ void onClockStart() {
   Serial.println("[uCLOCK] onClockStart() called.");
   usb_midi.sendRealTime(midi::Start); // MIDI Start message
   seq.start();
+  seq.advanceStep(0); // Immediately trigger the first step so sound is produced at startup
 }
 
 void onClockStop() {
@@ -443,6 +456,14 @@ void onClockStop() {
   usb_midi.sendRealTime(midi::Stop); // MIDI Stop message
   seq.stop();
 }
+
+void seqStoppedMode() {
+if (!seq.isRunning()) {
+
+
+}
+}
+
 
 /**
  * Monophonic step callback: handles rest, note length, and MIDI for a single
@@ -459,11 +480,19 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
 
   seq.advanceStep(wrapped_step);
 
+  // Live record: if record button is held, overwrite/update the current step
+  if (seq.isRunning() && recordButtonHeld) {
+    seq.setStepNote(wrapped_step, mmNote);
+    seq.setStepVelocity(wrapped_step, mmVelocity);
+    seq.setStepFiltFreq(wrapped_step, mmFiltFreq);
+
+  }
+
   // Parameter editing is now handled in loop1() for the selected step.
   // No parameter editing here to avoid conflicts.
 
-  drawSequencerOLED(seq.getState()); // OLED is off
-  // Serial.println("------------------------------------"); // Optional
+  Serial.println("------------------------------------"); // Optional
+Serial.println("------------------------------------"); // Optional
   // separator for logs
 }
 
@@ -514,11 +543,8 @@ void setup() {
 }
 
 void setup1() {
-  Serial.begin(115200);
-  Serial.print(" CORE1 SETUP1 ... ");
-  delay(200);
-  Serial.println("..");
-  delay(50);
+ 
+ 
 #if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
   // Initialize TinyUSB stack. This should be done once, early, on the core
   // handling USB.
@@ -531,7 +557,11 @@ void setup1() {
       millis()); // Use an unconnected analog pin and millis for better seed
 
   // initOLED();
-
+#ifndef DEBUG
+  Serial.begin(115200);
+  Serial.print(" CORE1 SETUP1 ... ");
+   delay(500);
+#endif
   VL53L1_Error status = 0;
   Wire.begin();               // use Wire1.begin() to use I2C-1
   sensor.initI2C(0x29, Wire); // use sensor.initI2C(0x29, Wire1); to use I2C-1
@@ -543,17 +573,25 @@ void setup1() {
   status = sensor.clearInterruptAndStartMeasurement();
 
   seq.init();
+#ifndef DEBUG
   Serial.print(" ...Distance Sensor Initialized... ");
+#endif
   delay(200);
+#ifndef DEBUG
   Serial.println("..");
+#endif
   delay(50);
   usb_midi.begin(MIDI_CHANNEL_OMNI);
+#ifndef DEBUG
   Serial.println("..");
+#endif
   delay(50);
   // Initialize builtin led for clock timer blinking
   // (Implement initBlinkLed() as needed)
   // initBlinkLed();
+#ifndef DEBUG
   Serial.print(" ...USB MIDI is Rockin!.... ");
+#endif
   delay(200);
   // Setup clock system
   uClock.init();
@@ -564,20 +602,30 @@ void setup1() {
   uClock.setTempo(90);
   uClock.start();
   delay(45);
+#ifndef DEBUG
   Serial.print(" ...uClock is GOOD.... ");
+#endif
   delay(200);
   // Touch sensor
+#ifndef DEBUG
   Serial.println("..");
+#endif
   delay(50);
   if (!touchSensor.begin()) {
+#ifndef DEBUG
     Serial.print(" ... ERROR - MPR121 not found... ");
+#endif
     while (1) {
       delay(55);
     }
   } else {
+#ifndef DEBUG
     Serial.print("... MPR121 is Rockin!....");
+#endif
   }
+#ifndef DEBUG
   Serial.println("..");
+#endif
   delay(50);
 
   Matrix_init(&touchSensor);
@@ -585,7 +633,9 @@ void setup1() {
 
   pinMode(PIN_TOUCH_IRQ, INPUT);
   // drawSequencerOLED(seq.getState());
+#ifndef DEBUG
   Serial.println("Core 1: Setup1 complete.");
+#endif
   delay(500);
 }
 
@@ -630,28 +680,34 @@ void loop1() {
       if (button16Held) {
         mmNote = map(mm, 0, 1400, 0, 36); // Map Lidar to scale index or MIDI note
         seq.setStepNote(selectedStepForEdit, mmNote);
+#ifndef DEBUG
         Serial.print("[PARAM] Step ");
         Serial.print(selectedStepForEdit);
         Serial.print(" note set to ");
         Serial.println(mmNote);
+#endif
       }
       // VELOCITY_BUTTON (Pad 17)
       if (button17Held) {
         mmVelocity = map(mm, 0, 1400, 0, 127); // Map Lidar to velocity
         seq.setStepVelocity(selectedStepForEdit, mmVelocity);
+#ifndef DEBUG
         Serial.print("[PARAM] Step ");
         Serial.print(selectedStepForEdit);
         Serial.print(" velocity set to ");
         Serial.println(mmVelocity);
+#endif
       }
       // FILTER_BUTTON (Pad 18)
       if (button18Held) {
         mmFiltFreq = map(mm, 0, 1400, 0, 5000); // Map Lidar to filter cutoff (Hz)
         seq.setStepFiltFreq(selectedStepForEdit, mmFiltFreq);
+#ifndef DEBUG
         Serial.print("[PARAM] Step ");
         Serial.print(selectedStepForEdit);
         Serial.print(" filter freq set to ");
         Serial.println(mmFiltFreq);
+#endif
       }
       // PARAM4_BUTTON (Pad index TBD)
       // Example: if (button19Held) { /* map and set param4 here */ }

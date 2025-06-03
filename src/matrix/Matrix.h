@@ -33,13 +33,13 @@
 #define MATRIX_BUTTON_COUNT 32
 
 // MPR121 input numbers for rows and columns
-extern const uint8_t MATRIX_ROW_INPUTS[3];
+extern const uint8_t MATRIX_ROW_INPUTS[4];
 extern const uint8_t MATRIX_COL_INPUTS[8];
 
 // MatrixButton: maps a logical button to its MPR121 input(s)
 typedef struct {
-  uint8_t rowInput; // 0 if not used (for Row 4)
-  uint8_t colInput; // Always used
+  uint8_t rowInput; // Always used (0-3)
+  uint8_t colInput; // Always used (0-7)
 } MatrixButton;
 
 // Button event type
@@ -64,8 +64,16 @@ void Matrix_scan();
 // Get the debounced state of a button (0–31)
 bool Matrix_getButtonState(uint8_t idx);
 
-// Set the event handler for button events (optional)
+/**
+ * Set the event handler for button events (optional)
+ */
 void Matrix_setEventHandler(void (*handler)(const MatrixButtonEvent &));
+
+/**
+ * Set the rising edge (button pressed) callback.
+ * This will be called when a button transitions from not pressed to pressed.
+ */
+void Matrix_setRisingEdgeHandler(void (*handler)(uint8_t buttonIndex));
 
 // Print the current button matrix state to Serial (for debugging)
 void Matrix_printState();

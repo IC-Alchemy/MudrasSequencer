@@ -34,7 +34,7 @@ This documentation covers the main firmware file (`Pico2DSP2CoreWorks.ino`), the
   - [Usage Example](#usage-example)
 - [Touch Matrix Module (`src/matrix`)](#touch-matrix-module-srcmatrix)
   - [Matrix Overview](#matrix-overview)
-  - [Matrix Scanning and Debouncing](#matrix-scanning-and-debouncing)
+  - [Matrix Scanning and Event Dispatch](#matrix-scanning-and-event-dispatch)
   - [Event Handling](#event-handling)
   - [API Functions](#api-functions)
 
@@ -72,7 +72,9 @@ This is the central firmware file that integrates audio synthesis, sequencing, d
 - Uses an Adafruit MPR121 capacitive touch sensor to scan a 4x8 button matrix (32 buttons).
 - The matrix is initialized and scanned regularly.
 - Button events are handled by `matrixEventHandler()`, which toggles sequencer steps or modifies note/velocity when specific buttons are held.
-- Debouncing and event dispatching are managed by the matrix module.
+- The matrix module dispatches button press and release events via callbacks.
+- A new rising edge callback feature triggers a user-defined function when a button is first pressed.
+- Debouncing is handled externally by the application.
 
 ### MIDI and Clock Handling
 
@@ -153,28 +155,30 @@ void onClockTick(uint8_t step) {
 
 ### Matrix Overview
 
-This module manages a 32-button capacitive touch matrix using a single MPR121 sensor. It handles scanning, debouncing, and event dispatching.
+This module manages a 32-button capacitive touch matrix using a single MPR121 sensor. It handles scanning and event dispatching.
 
-### Matrix Scanning and Debouncing
+### Matrix Scanning and Event Dispatch
 
 - The matrix is logically arranged as 4 rows by 8 columns.
-- Rows 1-3 require both row and column inputs to be touched.
-- Row 4 buttons are detected by column input only, with additional checks to avoid conflicts.
-- Debouncing is implemented with a 10ms debounce interval.
-- Raw touch states are compared to debounced states to detect changes.
+- Each button corresponds to a unique (row, column) pair.
+- The matrix is scanned frequently (e.g., every 1ms) by reading the MPR121 sensor's touch bits.
+- Button state changes (pressed or released) are detected by comparing current and previous states.
+- When a button state changes, an event is dispatched via a user-registered callback.
 
 ### Event Handling
 
 - Button press and release events are dispatched via a user-registered event handler callback.
 - Events include the button index (0-31) and event type (pressed or released).
+- A dedicated rising edge callback can be registered to trigger on the first press of a button (transition from released to pressed).
 - The matrix module does not implement application logic; it only provides clean event notifications.
 
 ### API Functions
 
 - `Matrix_init(Adafruit_MPR121 *sensor)`: Initialize matrix with MPR121 sensor instance.
-- `Matrix_scan()`: Scan matrix and update debounced states; call frequently (e.g., every 1ms).
-- `Matrix_getButtonState(uint8_t idx)`: Query debounced state of a button.
+- `Matrix_scan()`: Scan matrix and update states; call frequently.
+- `Matrix_getButtonState(uint8_t idx)`: Query current state of a button.
 - `Matrix_setEventHandler(void (*handler)(const MatrixButtonEvent &))`: Register event handler callback.
+- `Matrix_setRisingEdgeHandler(void (*handler)(uint8_t buttonIndex))`: Register rising edge callback.
 - `Matrix_printState()`: Print current button states to serial for debugging.
 
 ---
