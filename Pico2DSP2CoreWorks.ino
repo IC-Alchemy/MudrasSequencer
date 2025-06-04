@@ -6,7 +6,6 @@
 /*
  * Main firmware for Pico2DSP2CoreWorks
  * - Audio synthesis and output (I2S)
- * - Sequencer and OLED visualization
  * - Touch matrix input (MPR121)
  * - MIDI and clock sync
  *
@@ -16,7 +15,6 @@
 // -----------------------------------------------------------------------------
 // 1. INCLUDES & DEFINES
 // -----------------------------------------------------------------------------
-
 // --- Audio & DSP ---
 #include "src/audio/audio.h"
 #include "src/audio/audio_i2s.h"
@@ -33,12 +31,9 @@
 // --- Sequencer ---
 #include "src/sequencer/Sequencer.h"
 
-// --- Display (OLED) ---
 #include <Melopero_VL53L1X.h>
 
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <SPI.h>
+
 #include <Wire.h>
 
 // --- MIDI & USB ---
@@ -69,19 +64,8 @@ Melopero_VL53L1X sensor;
 // Adafruit_VL53L1X vl53 = Adafruit_VL53L1X(0, IRQ_PIN); // Unused variable,
 // consider removing
 
-// --- OLED Display ---
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_MOSI 10
-#define OLED_CLK 11
-#define OLED_DC 12
-#define OLED_CS 13
-#define OLED_RESET 9
-#define NOTE_LENGTH                                                            \
-  4 // min: 1 max: 23 DO NOT EDIT BEYOND!!! 12 = 50% on 96ppqn, same as original \
+#define NOTE_LENGTH    4 // min: 1 max: 23 DO NOT EDIT BEYOND!!! 12 = 50% on 96ppqn, same as original \
      // tb303. 62.5% for triplets time signature
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, OLED_MOSI, OLED_CLK,
-                         OLED_DC, OLED_RESET, OLED_CS);
 
 // --- Sequencer ---
 Sequencer seq;
@@ -175,24 +159,6 @@ static inline int16_t convertSampleToInt16(float sample) {
 // 4. DISPLAY: OLED SEQUENCER VISUALIZATION
 // -----------------------------------------------------------------------------
 
-void initOLED() {
-
-  // --- OLED Display ---
-  if (!display.begin(SSD1306_SWITCHCAPVCC)) {
-    for (;;)
-      ; // Display initialization failed, halt
-  }
-  display.clearDisplay();
-  display.setTextSize(1); // Normal 1:1 pixel scale
-
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println(F("Sequencer OLED Ready"));
-  display.display();
-  // delay(10000);
-  display.clearDisplay();
-  display.display();
-}
 
 float applyFilterFrequency(float targetFreq) {
   static float currentFreq = 0.0f;
@@ -239,7 +205,7 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
     // 6. Apply amplitude envelope and step velocity to the filtered signal
     // vel1 is 0.0 to 1.0 from sequencer step's velocity
-    float final_audio_signal = filtered_signal * current_amp_env_value * vel1;
+    float final_audio_signal = filtered_signal * current_amp_env_value;
 
     // 7. Scale for output (0.5f was the previous scaling factor)
     float sumL = final_audio_signal * 0.5f;
@@ -341,7 +307,6 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
 #endif
         }
       }
-      drawSequencerOLED(seq.getState());
     }
   } else {
     if (evt.type == MATRIX_BUTTON_PRESSED) {
@@ -407,7 +372,6 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
       default:
         break;
       }
-      drawSequencerOLED(seq.getState());
     }
   }
 }
@@ -489,10 +453,7 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
   }
 
   // Parameter editing is now handled in loop1() for the selected step.
-  // No parameter editing here to avoid conflicts.
 
-  Serial.println("------------------------------------"); // Optional
-Serial.println("------------------------------------"); // Optional
   // separator for logs
 }
 
@@ -632,7 +593,6 @@ void setup1() {
   Matrix_setEventHandler(matrixEventHandler); // Register the event handler
 
   pinMode(PIN_TOUCH_IRQ, INPUT);
-  // drawSequencerOLED(seq.getState());
 #ifndef DEBUG
   Serial.println("Core 1: Setup1 complete.");
 #endif
