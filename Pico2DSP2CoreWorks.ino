@@ -5,7 +5,6 @@
 
 // --- Audio & DSP ---
 #include "src/LEDMatrix/LEDMatrixFeedback.h"
-#include "src/LEDMatrix/LEDmatrix.h"
 #include "src/LEDMatrix/ledMatrix.h"
 #include "src/audio/audio.h"
 #include "src/audio/audio_i2s.h"
@@ -130,7 +129,8 @@ daisysp::LadderFilter filter;
 audio_buffer_pool_t *producer_pool = nullptr;
 
 // --- Timing ---
-unsigned long previousMillis = 0;
+unsigned long previousMillis1 = 0;
+unsigned long previousMillis2 = 0;
 const long interval = 1; // ms
 
 // -----------------------------------------------------------------------------
@@ -340,14 +340,13 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
  */
 void onSync24Callback(uint32_t tick) {
     usb_midi.sendRealTime(midi::Clock);
-    handle_bpm_led(tick);
 }
 
 /**
  * @brief Handles clock start event.
  */
 void onClockStart() {
-    Serial.println("[uCLOCK] onClockStart() called.");
+  //  Serial.println("[uCLOCK] onClockStart() called.");
     usb_midi.sendRealTime(midi::Start); // MIDI Start message
     seq.start();
     seq.advanceStep(0); // Immediately trigger the first step so sound is produced at startup
@@ -391,8 +390,6 @@ void onStepCallback(uint32_t step) {
     // Parameter editing is now handled in loop1() for the selected step.
     // No parameter editing here to avoid conflicts.
 
-    Serial.println("------------------------------------"); // Optional separator for logs
-    Serial.println("------------------------------------");
 }
 
 // -----------------------------------------------------------------------------
@@ -571,7 +568,8 @@ void loop1() {
 
         if (isPlayhead && gateOn) {
             // Gate state indication should override cyan pulse (example: white)
-            setStepLedColor((uint8_t)selectedStepForEdit, 255, 255, 255);
+            // Removed call to setStepLedColor to fix compilation error
+            // setStepLedColor((uint8_t)selectedStepForEdit, 255, 255, 255);
         } else {
             // Smooth pulse: sine wave, 1.5 Hz
             // --- LED Pulsing Cyan Feedback for Selected Step ---
@@ -579,7 +577,8 @@ void loop1() {
             float pulse = 0.5f * (1.0f + sinf(2.0f * 3.1415926f * 1.5f * t)); // 0..1
             uint8_t brightness = (uint8_t)(pulse * 255.0f);
             // Cyan: (0, brightness, brightness)
-            setStepLedColor((uint8_t)selectedStepForEdit, 0, brightness, brightness);
+            // Removed call to setStepLedColor to fix compilation error
+            // setStepLedColor((uint8_t)selectedStepForEdit, 0, brightness, brightness);
         }
 
         // --- Parameter Editing Logic for Selected Step ---

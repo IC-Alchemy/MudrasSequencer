@@ -1,6 +1,17 @@
 #include "LEDMatrixFeedback.h"
 #include <Arduino.h>
+#include <FastLED.h>
 #include <math.h>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <Arduino.h>
+#include <math.h>
+
+void setStepLedColor(uint8_t step, uint8_t r, uint8_t g, uint8_t b) {
+    extern LEDMatrix ledMatrix; // Use the global ledMatrix instance
+    ledMatrix.setLED(step, 0, CRGB(r, g, b));
+}
 
 void updateStepLEDs(
     LEDMatrix& ledMatrix,

@@ -8,7 +8,7 @@ class LEDMatrix {
 public:
     static constexpr uint8_t WIDTH = 16;
     static constexpr uint8_t HEIGHT = 8;
-    static constexpr uint8_t DATA_PIN = 15;
+    static constexpr uint8_t DATA_PIN = 0;
     static constexpr uint8_t CLOCK_PIN = 14;
     static constexpr uint8_t LATCH_PIN = 13;
     static constexpr uint8_t OE_PIN = 12;

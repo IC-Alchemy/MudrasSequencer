@@ -16,4 +16,6 @@ void updateStepLEDs(
     int mm // Lidar distance
 );
 
+void setStepLedColor(uint8_t step, uint8_t r, uint8_t g, uint8_t b);
+
 #endif // LEDMATRIX_FEEDBACK_H
