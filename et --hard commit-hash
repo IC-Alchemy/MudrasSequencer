@@ -1,0 +1,134 @@
+[33mcommit ea47153407cfa94ea329a76811fa635ce42356fa[m[33m ([m[1;36mHEAD[m[33m)[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Mon Jun 2 00:45:06 2025 -0700
+
+    Audio and Midi Works
+    Need LED Feedback Soon
+    Refactor formatting and inline comments in Pico2DSP2CoreWorks.ino
+    
+    - Adjust header and comment formatting for consistency
+    - Reformat scale arrays and macro definitions for improved readability
+    - Tidy unused variable comments and indentation for clarity
+
+[33mcommit 02475259217605896914c2e4e258609c8832bb2b[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sun Jun 1 22:37:18 2025 -0700
+
+    Fix scale array dimensions and update note lookup
+    
+    Reduce the scale array from 7 to 5 rows in Pico2DSP2CoreWorks.ino and update Sequencer.cpp to reference a proper index (using scale[0][…]) to ensure correct note generation.
+
+[33mcommit cdab3aafcc112279ba2f15f7a9335ad4728834bf[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sun Jun 1 22:32:04 2025 -0700
+
+    Clean up obsolete docs and source files, update configurations
+    
+    • Remove outdated sequencer plan files and distanceRead source/header
+    • Update VSCode configuration (c_cpp_properties.json, settings.json)
+    • Modify Pico2DSP2CoreWorks.ino, README.md, and Sequencer.cpp
+    • Add new VSCode launch.json file
+
+[33mcommit e0eac9931a7ae30a6638cf9c970855aed4b466bc[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sun Jun 1 22:31:46 2025 -0700
+
+    Update step handling: map distance to note/velocity based on button presses, refine sequencer interaction in Pico2DSP2CoreWorks.ino
+
+[33mcommit db86efe3632a1c99094c0506d130a9854d208b81[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sun Jun 1 19:13:59 2025 -0700
+
+    Improve button logging, sensor initialization, and envelope handling
+    
+    • Add Serial prints for button 16/17 press and release events in Pico2DSP2CoreWorks.ino
+    • Re-enable and log VL53L1X sensor initialization feedback
+    • Adjust the envelope release call placement in Sequencer.cpp to ensure proper note off behavior
+
+[33mcommit b0d29a06155418aca38d07690fd48dd8303f0684[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sun Jun 1 16:31:53 2025 -0700
+
+    Refactor button events: add held state flags and update sensor logic
+    
+    • Reformat NOTE_LENGTH macro for clarity
+    • Introduce button16Held and button17Held flags to track press/release events
+    • Remove distance sensor mapping from button 16/17 handlers and comment out sensor initialization
+    • Update matrixEventHandler to conditionally set held state flags
+
+[33mcommit 69e09481585ae10ae7b86d2432657a803e4eeaa0[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sun Jun 1 15:35:25 2025 -0700
+
+    Refactor firmware: update osc init, scale table & add distance sensor
+    
+    • Reorder includes and adjust code formatting for clarity
+    • Replace flat scale array with multi-scale (Major, Harmonic Minor) structure
+    • Initialize distance sensor variables and integrate sensor header files
+    • Refine oscillator initialization calls and Sequencer code tweaks
+
+[33mcommit 6dd6ca92d672ab9029e8451c23cbc3c452184c5d[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sun Jun 1 00:55:03 2025 -0700
+
+    Refine oscillator tuning, envelope settings, and sequencer event handling
+    
+    • Adjust oscillator frequency multipliers for improved pitch accuracy
+    • Update envelope sustain levels and release times for refined sound shaping
+    • Modify sequencer matrix event logic to correctly toggle display pages and improve OLED updates
+    • Minor initialization tweaks and code cleanup for better system behavior
+
+[33mcommit 598aea0a8b0bae9ed1459271d372bf28b7869f52[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sat May 31 18:07:20 2025 -0700
+
+    Refactor sequencer timing, scale, and audio settings
+    
+    • Update NOTE_LENGTH from 12 to 4 and adjust the scale table values
+    • Change the timing interval from 333 ms to 1 ms
+    • Modify oscillator frequency ratios and envelope parameters
+    • Add OLED initialization routine for display setup and feedback
+
+[33mcommit a71ea5252c9c0cd39e2e2e9f636e322ea12ed301[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sat May 31 14:46:38 2025 -0700
+
+    Refactor I/O and sequencing behavior
+    
+    • Update OLED pin assignments and display setup
+    • Apply proper gain to oscillator outputs by fixing multiplier logic
+    • Modify matrix event handling (change page toggle index and disable extra Serial logging)
+    • Use randomized delays in setup and seed the random number generator
+    • Remove obsolete audio migration plan document
+
+[33mcommit d93dd0941814c71fb654801088f47705b3097936[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sat May 31 05:35:37 2025 -0700
+
+    Sequencer Works! With Random melody at first
+
+[33mcommit 8203266ab5747f4c96b884538a726780bfc4548e[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sat May 31 05:06:47 2025 -0700
+
+    Refactor oscillator/envelope settings and add sequencer matrix handler
+    
+    • Remove pitch offsets and adjust frequency tuning for oscillators
+    • Update envelope attack, decay, and release times to refine sound shaping
+    • Disable unused oscillators and remove redundant button setup
+    • Introduce a matrix event handler for sequencer step toggling and display page
+    • Add new DSP wavetable oscillator files for future waveform support
+
+[33mcommit 4a7bb3de287167280e368c6c07035cb533191070[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sat May 31 02:27:21 2025 -0700
+
+    It Now Compiles!
+    
+    Midi is being output, but no OLED  Steps can be turned on and off but it doesn't work the best
+
+[33mcommit be6d4e1217baf7020e8eba0fffcff02be991adc8[m
+Author: IC-Alchemy <153705720+IC-Alchemy@users.noreply.github.com>
+Date:   Sat May 31 01:30:31 2025 -0700
+
+    Initial commit
