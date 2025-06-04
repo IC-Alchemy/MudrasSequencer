@@ -29,7 +29,7 @@ extern "C" {
 #ifdef PICO_AUDIO_DMA_IRQ
 #define PICO_AUDIO_I2S_DMA_IRQ PICO_AUDIO_DMA_IRQ
 #else
-#define PICO_AUDIO_I2S_DMA_IRQ 1
+#define PICO_AUDIO_I2S_DMA_IRQ 0
 #endif
 #endif
 
@@ -37,7 +37,7 @@ extern "C" {
 #ifdef PICO_AUDIO_PIO
 #define PICO_AUDIO_I2S_PIO PICO_AUDIO_PIO
 #else
-#define PICO_AUDIO_I2S_PIO 1
+#define PICO_AUDIO_I2S_PIO 0
 #endif
 #endif
 

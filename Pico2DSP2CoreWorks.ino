@@ -1,6 +1,5 @@
 
-
-///  #define DEBUG     Turns on a ton of serial prints, don't use unless you need it
+  #define DEBUG     Turns on a ton of serial prints, don't use unless you need it
 
 
 // --- Audio & DSP ---
@@ -502,7 +501,7 @@ void setup1() {
     } else {
 #ifndef DEBUG
         Serial.print("... MPR121 is Rockin!....");
-        Serial.print(" ...uClock is GOOD.... ");
+        Serial.print(" ...uClock is GOOD... ");
         delay(345);
         Serial.println("Core 1: Setup1 complete.");
         delay(500);
