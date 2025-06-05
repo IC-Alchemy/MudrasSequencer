@@ -18,6 +18,10 @@
 // Access global note1 and scale[] from main .ino
 extern volatile int note1;
 extern volatile float freq1;
+
+// Access step editing state and distance sensor reading from main .ino
+extern int selectedStepForEdit;
+extern int mm;
 extern volatile float vel1;
 extern int scale[5][48]; 
 
@@ -73,15 +77,15 @@ void Sequencer::initializeSteps() {
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
         state.steps[i] = Step(); // Default initialization
         state.steps[i].note = 0;
-        state.steps[i].filter = 0.5f; // Default filter value as float (matches SequencerDefs.h change)
-
-        state.steps[i].gate = true; // All gates off initially
-            // Serial.print("  Step "); Serial.print(i);
-            // Serial.print(": ON, Note Index: "); Serial.println(state.steps[i].note);
-      
-            // Serial.print("  Step "); Serial.print(i);
-            // Serial.print(": OFF, Note Index: "); Serial.println(state.steps[i].note);
-        
+        state.steps[i].gate = true; // All gates ON
+        state.steps[i].velocity = 100.0f / 127.0f; // Velocity at 100 (MIDI scale)
+        state.steps[i].filter = 2000.0f / 5000.0f; // Filter freq at 2000 Hz (normalized)
+        // Serial.print("  Step "); Serial.print(i);
+        // Serial.print(": ON, Note Index: "); Serial.println(state.steps[i].note);
+        // Serial.print("  Step "); Serial.print(i);
+        // Serial.print(": Velocity: "); Serial.println(state.steps[i].velocity);
+        // Serial.print("  Step "); Serial.print(i);
+        // Serial.print(": Filter: "); Serial.println(state.steps[i].filter);
     }
     
 }
@@ -156,14 +160,43 @@ void Sequencer::reset() {
  * - Modular, robust, and well-documented.
  * @param current_uclock_step The current step number (0-15) provided by uClock.
  */
-void Sequencer::advanceStep(uint8_t current_uclock_step) {
+void Sequencer::advanceStep(uint8_t current_uclock_step, int mm, bool recordButtonHeld) {
     if (!state.running) {
         return;
     }
         releaseEnvelope(); // Sets trigenv1 = false
     // Wrap step index to sequencer length
  state.playhead = current_uclock_step;
-    Step &currentStep = state.steps[state.playhead];
+ Step &currentStep = state.steps[state.playhead];
+
+ // --- Auto-write distance sensor to step if no step is selected for edit and gate is high ---
+ if (recordButtonHeld && selectedStepForEdit == -1 && currentStep.gate) {
+     // Map mm to note, velocity, and filter using same mapping as UI handler
+     int mmNote = map(mm, 0, 1400, 0, 36);
+     int mmVelocity = map(mm, 0, 1400, 0, 127);
+     int mmFiltFreq = map(mm, 0, 1400, 0, 5000);
+
+     // Clamp to valid ranges if necessary
+     if (mmNote < 0) mmNote = 0;
+     if (mmNote > 36) mmNote = 36;
+     if (mmVelocity < 0) mmVelocity = 0;
+     if (mmVelocity > 127) mmVelocity = 127;
+     if (mmFiltFreq < 0) mmFiltFreq = 0;
+     if (mmFiltFreq > 5000) mmFiltFreq = 5000;
+
+     currentStep.note = mmNote;
+     currentStep.velocity = mmVelocity / 127.0f; // velocity is float 0.0-1.0
+     currentStep.filter = mmFiltFreq / 5000.0f;  // filter is float 0.0-1.0
+
+     Serial.print("[SEQ] Auto-write at step ");
+     Serial.print(state.playhead);
+     Serial.print(": note=");
+     Serial.print(mmNote);
+     Serial.print(" velocity=");
+     Serial.print(mmVelocity);
+     Serial.print(" filter=");
+     Serial.println(mmFiltFreq);
+ }
     if (lastNote >= 0) {
         // usb_midi.sendNoteOff(lastNote, 0, 1); // Channel 1, velocity 0
     }

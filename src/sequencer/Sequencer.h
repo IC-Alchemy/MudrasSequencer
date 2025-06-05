@@ -73,7 +73,8 @@ public:
    * @brief Processes the sequencer logic for the given step.
    * @param current_uclock_step The current step number (0-15) provided by uClock.
    */
-  void advanceStep(uint8_t current_uclock_step);
+  // Modified: Now takes mm (distance) and recordButtonHeld as parameters
+  void advanceStep(uint8_t current_uclock_step, int mm, bool recordButtonHeld);
 
   // Toggle step ON/OFF
   void toggleStep(uint8_t stepIdx);
