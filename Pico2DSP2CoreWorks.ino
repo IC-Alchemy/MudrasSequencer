@@ -25,7 +25,7 @@
 #include "src/dsp/phasor.h"
 #include <cmath>
 #include <cstdint>
-
+#define DEBUG
 #warning "ladder.h included"
 
 // --- Sequencer ---
@@ -409,7 +409,7 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
     // The original issue was that releasing one (e.g. 16) would set recordButtonHeld=false even if 17 was still held.
     // The parameter recording itself doesn't use recordButtonHeld, but seq.advanceStep does.
     // Let's defer the full fix for recordButtonHeld to keep focus, but the user should be aware.
-}
+}}
 
 // -----------------------------------------------------------------------------
 // 7. MIDI & CLOCK HANDLERS
@@ -497,18 +497,18 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
       // Record parameters if their respective buttons are held
       if (button16Held) { // Note recording
         int mmNote = map(mm, 0, 1400, 0, 36); // Same mapping as UI
-        mmNote_mapped = constrain(mmNote_mapped, 0, 36);
-        seq.setStepNote(wrapped_step, mmNote_mapped);
+        mmNote = constrain(mmNote, 0, 36);
+        seq.setStepNote(wrapped_step, mmNote);
 #ifndef DEBUG
-        Serial.print("  -> Note mapped: "); Serial.println(mmNote_mapped);
+        Serial.print("  -> Note mapped: "); Serial.println(mmNote);
 #endif
       }
       if (button17Held) { // Velocity recording
         int mmVelocity = map(mm, 0, 1400, 0, 127); // Same mapping as UI
-        mmVelocity_mapped = constrain(mmVelocity_mapped, 0, 127);
+        mmVelocity = constrain(mmVelocity, 0, 127);
         seq.setStepVelocity(wrapped_step, mmVelocity_mapped);
 #ifndef DEBUG
-        Serial.print("  -> Velo mapped: "); Serial.println(mmVelocity_mapped);
+        Serial.print("  -> Velo mapped: "); Serial.println(mmVelocity);
 #endif
       }
       if (button18Held) { // Filter frequency recording
@@ -516,11 +516,11 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
         // seq.setStepFiltFreq expects a float 0.0f to 1.0f if it's a normalized value,
         // or the direct Hz value if that's how Sequencer handles it.
         // Assuming Sequencer expects direct Hz based on loop1()
-        int mmFiltFreq_mapped = map(mm, 0, 1400, 0, 5000); // Same mapping as UI
-        mmFiltFreq_mapped = constrain(mmFiltFreq_mapped, 0, 5000);
-        seq.setStepFiltFreq(wrapped_step, (float)mmFiltFreq_mapped); // Pass as float Hz
+        int mmFiltFreq = map(mm, 0, 1400, 0, 2000); // Same mapping as UI
+        mmFiltFreq_mapped = constrain(mmFiltFreq, 0, 2000);
+        seq.setStepFiltFreq(wrapped_step, (float)mmFiltFreq); // Pass as float Hz
 #ifndef DEBUG
-        Serial.print("  -> Filt mapped: "); Serial.println(mmFiltFreq_mapped);
+        Serial.print("  -> Filt mapped: "); Serial.println(mmFiltFreq);
 #endif
       }
     }
