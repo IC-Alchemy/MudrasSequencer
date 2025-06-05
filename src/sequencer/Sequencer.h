@@ -44,26 +44,17 @@ class Sequencer {
 public:
   Sequencer();
 
+  // Step length (number of steps in the sequence, user-adjustable, max 16)
+  uint8_t getStepLength() const { return stepLength; }
+  void setStepLength(uint8_t len) { stepLength = (len > 0 && len <= SEQUENCER_NUM_STEPS) ? len : SEQUENCER_NUM_STEPS; }
+
   // Instantly play a step for real-time feedback (does not advance playhead)
   void playStepNow(uint8_t stepIdx);
 
-  /**
-   * @brief Initialize the sequencer to a known good state.
-   *
-   * Resets all steps, playhead, and running state to defaults. Validates the integrity
-   * of the internal state array. If any issue is detected, sets an internal error flag
-   * and returns false. Safe to call multiple times (idempotent).
-   *
-   * @return true if initialization succeeded, false if an error was detected.
-   */
-  bool init();
+ 
+  void init();
 
-  /**
-   * @brief Check if the sequencer is in an error state after initialization.
-   * @return true if an error was detected during the last init(), false otherwise.
-   */
-  bool hasError() const;
-
+ 
   // Start/stop sequencer
   void start();
   void stop();
@@ -73,8 +64,9 @@ public:
    * @brief Processes the sequencer logic for the given step.
    * @param current_uclock_step The current step number (0-15) provided by uClock.
    */
-  // Modified: Now takes mm (distance) and recordButtonHeld as parameters
-  void advanceStep(uint8_t current_uclock_step, int mm, bool recordButtonHeld);
+  void advanceStep(uint8_t current_uclock_step, int mm_distance,
+                   bool is_record_button_held, bool is_button16_held, bool is_button17_held, bool is_button18_held,
+                   int current_selected_step_for_edit);
 
   // Toggle step ON/OFF
   void toggleStep(uint8_t stepIdx);
@@ -116,6 +108,32 @@ private:
  * Stores the actual MIDI note value sent. -1 means no note is currently playing.
    */
   int8_t lastNote = -1;
+private:
+  uint8_t stepLength = SEQUENCER_NUM_STEPS; // Default 16, user-adjustable
+public:
+    // Monophonic note duration tracking (Step 2 integration plan)
+    /**
+     * @brief Start a monophonic note with a specified duration (in ticks).
+     * @param note MIDI note number to play.
+     * @param duration Number of ticks the note should last.
+     */
+    void startNote(uint8_t note, uint16_t duration);
+
+    /**
+     * @brief Decrement the note duration counter. If zero, sends NoteOff and clears state.
+     */
+    void tickNoteDuration();
+
+    /**
+     * @brief Sends NoteOff for the current note and clears the active note state.
+     */
+    void handleNoteOff();
+
+private:
+    // Monophonic note duration tracking variables
+    int8_t currentNote = -1;           // -1 means no note is currently active
+    uint16_t noteDurationCounter = 0;  // Remaining duration in ticks
+
 };
 
 #endif // SEQUENCER_H

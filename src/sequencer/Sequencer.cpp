@@ -24,6 +24,8 @@ extern int selectedStepForEdit;
 extern int mm;
 extern volatile float vel1;
 extern int scale[5][48]; 
+     extern volatile bool button16Held, button17Held, button18Held;
+
 
 extern volatile bool trigenv1; // Used for triggering envelope
 extern volatile bool trigenv2; // Used for triggering envelope
@@ -36,12 +38,7 @@ const uint8_t MIDI_BASE_NOTE = 36; // Example: C1 (MIDI note 36)
 // ==============================
 //  Sequencer Implementation
 // ==============================
-namespace {
-    // Helper: Validate a MIDI note value
-    inline bool isValidMidiNote(uint8_t note) {
-        return note <= 127;
-    }
-}
+
 
 /**
  * @brief Initialize the sequencer to a known good state.
@@ -52,34 +49,20 @@ namespace {
  *
  * @return true if initialization succeeded, false if an error was detected.
  */
-bool Sequencer::init() {
-    resetState();
-    errorFlag = !validateState();
-    return !errorFlag;
-}
-
-/**
- * @brief Reset all sequencer state to defaults (helper for init()).
- *        Sets playhead, running, and all steps to known values.
- */
-void Sequencer::resetState() {
+void Sequencer::init() {
     state.playhead = 0;
     state.running = false;
-    initializeSteps();
+    initializeSteps(); 
 }
 
-/**
- * @brief Initialize all steps to default values.
- * Note is initialized to a random scale index.
- */
 void Sequencer::initializeSteps() {
     // Serial output removed due to missing Serial definition
-    for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
+    for (uint8_t i = 0; i < stepLength; ++i) {
         state.steps[i] = Step(); // Default initialization
         state.steps[i].note = 0;
         state.steps[i].gate = true; // All gates ON
         state.steps[i].velocity = 100.0f / 127.0f; // Velocity at 100 (MIDI scale)
-        state.steps[i].filter = 2000.0f / 5000.0f; // Filter freq at 2000 Hz (normalized)
+        state.steps[i].filter = random(200,1000)/1000.0f; // Filter freq at 2000 Hz (normalized)
         // Serial.print("  Step "); Serial.print(i);
         // Serial.print(": ON, Note Index: "); Serial.println(state.steps[i].note);
         // Serial.print("  Step "); Serial.print(i);
@@ -87,33 +70,15 @@ void Sequencer::initializeSteps() {
         // Serial.print("  Step "); Serial.print(i);
         // Serial.print(": Filter: "); Serial.println(state.steps[i].filter);
     }
+    // Clear any unused steps
+    for (uint8_t i = stepLength; i < SEQUENCER_NUM_STEPS; ++i) {
+        state.steps[i] = Step();
+        state.steps[i].gate = false;
+    }
     
 }
 
 
-/**
- * @brief Validate the integrity of the sequencer state.
- *        Checks playhead bounds, step note range, and step state validity.
- * @return true if state is valid, false otherwise.
- */
-bool Sequencer::validateState() const {
-    if (state.playhead >= SEQUENCER_NUM_STEPS) {
-        return false;
-    }
-    for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
-        const Step& s = state.steps[i];
-        // gate must be bool, no extra validation needed
-    }
-    return true;
-}
-
-/**
- * @brief Check if the sequencer is in an error state after initialization.
- * @return true if an error was detected during the last init(), false otherwise.
- */
-bool Sequencer::hasError() const {
-    return errorFlag;
-}
 
 /**
  * @brief Default constructor. Initializes sequencer state to default values.
@@ -161,90 +126,74 @@ void Sequencer::reset() {
  * @param current_uclock_step The current step number (0-15) provided by uClock.
  */
 void Sequencer::advanceStep(uint8_t current_uclock_step, int mm, bool recordButtonHeld) {
-    if (!state.running) {
-        return;
+  // Always send NoteOff for the last note before starting a new one (monophonic)
+    if (currentNote >= 0) {
+        handleNoteOff();
     }
-        releaseEnvelope(); // Sets trigenv1 = false
     // Wrap step index to sequencer length
- state.playhead = current_uclock_step;
+ // Wrap step index to stepLength
+ state.playhead = current_uclock_step % stepLength;
  Step &currentStep = state.steps[state.playhead];
 
  // --- Auto-write distance sensor to step if no step is selected for edit and gate is high ---
  if (recordButtonHeld && selectedStepForEdit == -1 && currentStep.gate) {
-     // Map mm to note, velocity, and filter using same mapping as UI handler
-     int mmNote = map(mm, 0, 1400, 0, 36);
-     int mmVelocity = map(mm, 0, 1400, 0, 127);
-     int mmFiltFreq = map(mm, 0, 1400, 0, 5000);
+     // Only record one type of data at a time, based on which record button is held
 
-     // Clamp to valid ranges if necessary
-     if (mmNote < 0) mmNote = 0;
-     if (mmNote > 36) mmNote = 36;
-     if (mmVelocity < 0) mmVelocity = 0;
-     if (mmVelocity > 127) mmVelocity = 127;
-     if (mmFiltFreq < 0) mmFiltFreq = 0;
-     if (mmFiltFreq > 5000) mmFiltFreq = 5000;
-
-     currentStep.note = mmNote;
-     currentStep.velocity = mmVelocity / 127.0f; // velocity is float 0.0-1.0
-     currentStep.filter = mmFiltFreq / 5000.0f;  // filter is float 0.0-1.0
-
-     Serial.print("[SEQ] Auto-write at step ");
-     Serial.print(state.playhead);
-     Serial.print(": note=");
-     Serial.print(mmNote);
-     Serial.print(" velocity=");
-     Serial.print(mmVelocity);
-     Serial.print(" filter=");
-     Serial.println(mmFiltFreq);
- }
-    if (lastNote >= 0) {
-        // usb_midi.sendNoteOff(lastNote, 0, 1); // Channel 1, velocity 0
-    }
-
+         if (button16Held) {
+             int mmNote = map(mm, 0, 1400, 0, 36);
+             if (mmNote < 0) mmNote = 0;
+             if (mmNote > 36) mmNote = 36;
+             currentStep.note = mmNote;
+         }  if (button17Held) {
+             int mmVelocity = map(mm, 0, 1400, 0, 127);
+             if (mmVelocity < 0) mmVelocity = 0;
+             if (mmVelocity > 127) mmVelocity = 127;
+             currentStep.velocity = mmVelocity / 127.0f;
+         }  if (button18Held) {
+             int mmFiltFreq = map(mm, 0, 1400, 0, 4000);
+             if (mmFiltFreq < 0) mmFiltFreq = 0;
+             if (mmFiltFreq > 5000) mmFiltFreq = 4000;
+             currentStep.filter = mmFiltFreq ;
+         }
     
+ 
+ }
+  
+
     if (currentStep.gate) {
         // Clamp note index to scale size
         uint8_t scaleIndex = (currentStep.note >= scaleSize) ? 0 : currentStep.note;
-  // Ensure scaleIndex is valid for the actual 'scale' array bounds.
         if (scaleIndex >= SCALE_ARRAY_SIZE) { // Defensive check
-            scaleIndex = 0; 
+            scaleIndex = 0;
         }
         int new_midi_note = MIDI_BASE_NOTE + scale[0][scaleIndex];
 
         // Update the synth engine's target note (global variable).
         note1 = new_midi_note;
 
-
         // Trigger the envelope. This will cause re-articulation on every gated step.
-        // If slide/legato functionality were implemented, this call would be conditional.
         triggerEnvelope(); // Sets trigenv1 = true
 
         // Use velocity and filter from step (velocity mapped to MIDI 0-127)
-        uint8_t midiVelocity = static_cast<uint8_t>(currentStep.velocity * 127.0f);
-        if (midiVelocity > 127) midiVelocity = 127;
+        vel1 = currentStep.velocity;
+        freq1 = currentStep.filter * 1.f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
 
-// Send MIDI Note On for the current step's note.
-        usb_midi.sendNoteOn(new_midi_note, midiVelocity, 1); // Channel 1
-vel1=currentStep.velocity;
-        // Optionally: apply currentStep.filter to synth engine here
-        // Optionally: apply currentStep.filter to synth engine here
-    freq1 = currentStep.filter*1.f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
+        // Start the note with a fixed duration (e.g., 24 ticks for a 16th note at 96 PPQN)
+        startNote(new_midi_note, 24);
 
         lastNote = new_midi_note; // Update lastNote to the currently playing MIDI note.
     } else {
-
-
-           // Current step's gate is OFF (a rest).
-        // The MIDI Note Off for any previously sounding note was handled above.
+        // Current step's gate is OFF (a rest).
+        handleNoteOff();
         releaseEnvelope(); // Sets trigenv1 = false
-        lastNote = -1;     // No MIDI note is actively sounding from the sequencer.     
+        lastNote = -1;     // No MIDI note is actively sounding from the sequencer.
     }
 }
 /**
  * @brief Instantly play a step for real-time feedback (does not advance playhead).
  */
 void Sequencer::playStepNow(uint8_t stepIdx) {
-    if (stepIdx >= SEQUENCER_NUM_STEPS) return;
+    if (stepIdx >= stepLength) return;
     Step &currentStep = state.steps[stepIdx];
 
     // Clamp note index to scale size
@@ -296,7 +245,7 @@ void Sequencer::releaseEnvelope() {
 }
 // ToggleStep
 void Sequencer::toggleStep(uint8_t stepIdx) {
-    if (stepIdx >= SEQUENCER_NUM_STEPS) {
+    if (stepIdx >= stepLength) {
         // Handle out-of-bounds index, e.g., log an error or return
         // Serial.print("[SEQ] toggleStep: Invalid step index: "); Serial.println(stepIdx);
         return;
@@ -311,7 +260,7 @@ void Sequencer::toggleStep(uint8_t stepIdx) {
  */
 void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
     // Serial.print("[SEQ] setStepNote called for index: "); Serial.print(stepIdx); Serial.print(", noteIndex: "); Serial.println(noteIndex);
-    if (stepIdx >= SEQUENCER_NUM_STEPS) {
+    if (stepIdx >= stepLength) {
         // Serial.println("  - Invalid step index. Returning.");
         return;
     }
@@ -321,7 +270,7 @@ void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
 }
 
 void Sequencer::setStepVelocity(uint8_t stepIdx, uint8_t velocityByte) { // velocityByte is 0-127
-    if (stepIdx >= SEQUENCER_NUM_STEPS) {
+    if (stepIdx >= stepLength) {
         return;
     }
     // Convert 0-127 byte to 0.0f-1.0f float
@@ -329,7 +278,7 @@ void Sequencer::setStepVelocity(uint8_t stepIdx, uint8_t velocityByte) { // velo
 }
 void Sequencer::setStepFiltFreq(uint8_t stepIdx, float filter) {
  
-    if (stepIdx >= SEQUENCER_NUM_STEPS) {
+    if (stepIdx >= stepLength) {
         // Serial.println("  - Invalid step index. Returning.");
         return;
     }
@@ -341,7 +290,7 @@ void Sequencer::setStepFiltFreq(uint8_t stepIdx, float filter) {
  * @brief Set full step data using individual parameters.
  */
 void Sequencer::setStep(int index, bool gate, bool slide, int note, float velocity, float filter) {
-    if (index < 0 || index >= SEQUENCER_NUM_STEPS) {
+    if (index < 0 || index >= stepLength) {
         // Serial.println("Sequencer::setStep: Step index out of range.");
         return;
     }
@@ -368,7 +317,7 @@ void Sequencer::setStep(int index, bool gate, bool slide, int note, float veloci
  * @brief Set full step data using a Step object.
  */
 void Sequencer::setStep(int index, const Step& stepData) {
-    if (index < 0 || index >= SEQUENCER_NUM_STEPS) {
+    if (index < 0 || index >= stepLength) {
         // Serial.println("Sequencer::setStep: Step index out of range.");
         return;
     }
@@ -393,7 +342,7 @@ void Sequencer::setStep(int index, const Step& stepData) {
  * @return Const reference to the step.
  */
 const Step &Sequencer::getStep(uint8_t stepIdx) const {
-    if (stepIdx >= SEQUENCER_NUM_STEPS)
+    if (stepIdx >= stepLength)
         stepIdx = 0;
     return state.steps[stepIdx];
 }
@@ -421,3 +370,40 @@ const SequencerState& Sequencer::getState() const {
     return state;
 }
 
+
+// === Monophonic Note Duration Tracking (Step 2 integration plan) ===
+
+/**
+ * @brief Start a monophonic note with a specified duration (in ticks).
+ * @param note MIDI note number to play.
+ * @param duration Number of ticks the note should last.
+ */
+void Sequencer::startNote(uint8_t note, uint16_t duration) {
+    currentNote = note;
+    noteDurationCounter = duration;
+    // Send NoteOn (velocity hardcoded to 100 for now, channel 1)
+    usb_midi.sendNoteOn(currentNote, 100, 1);
+}
+
+/**
+ * @brief Decrement the note duration counter. If zero, sends NoteOff and clears state.
+ */
+void Sequencer::tickNoteDuration() {
+    if (currentNote >= 0 && noteDurationCounter > 0) {
+        --noteDurationCounter;
+        if (noteDurationCounter == 0) {
+            handleNoteOff();
+        }
+    }
+}
+
+/**
+ * @brief Sends NoteOff for the current note and clears the active note state.
+ */
+void Sequencer::handleNoteOff() {
+    if (currentNote >= 0) {
+        usb_midi.sendNoteOff(currentNote, 0, 1);
+        currentNote = -1;
+        noteDurationCounter = 0;
+    }
+}

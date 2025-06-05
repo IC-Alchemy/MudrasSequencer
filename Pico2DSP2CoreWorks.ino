@@ -25,7 +25,7 @@
 #include "src/dsp/phasor.h"
 #include <cmath>
 #include <cstdint>
-#define DEBUG
+//  #define DEBUG
 #warning "ladder.h included"
 
 // --- Sequencer ---
@@ -52,9 +52,8 @@
 // --- Step Selection & Pad Timing ---
 volatile int selectedStepForEdit = -1; // -1 means no step selected
  //  Distance Sensor
-int raw_mm = 0;
+volatile int raw_mm = 0;
 volatile int mm = 0;
-volatile int mmNote=7,mmVelocity=50,mmFiltFreq=2222; // mmNote, etc. are also modified in loop1 and potentially read elsewhere
 Melopero_VL53L1X sensor;
 
 // --- I2S Pin Configuration ---
@@ -278,12 +277,10 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
         // Single tap: toggle gate state
         seq.toggleStep(evt.buttonIndex);
         bool gateState = seq.getStep(evt.buttonIndex).gate;
-#ifndef DEBUG
         Serial.print("[MATRIX] Step ");
         Serial.print(evt.buttonIndex);
         Serial.print(" gate toggled (single tap). New gate value: ");
         Serial.println(gateState ? "ON" : "OFF");
-#endif
         // Optionally, update OLED or UI here to reflect new gate state
       } else {
         // Long press: select step for parameter editing
@@ -329,7 +326,6 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
 #endif
         break;
       case 19: // Record button
-        recordButtonHeld = true;
 #ifndef DEBUG
         Serial.println("[MATRIX] Record button held.");
 #endif
@@ -373,42 +369,15 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
         break;
       }
     }
-  }
-  // Update overall recordButtonHeld state based on individual button states
-  // This ensures recordButtonHeld is true if ANY of the relevant buttons are held.
-  // Assuming button 19's state is implicitly part of 'recordButtonHeld' if it was pressed.
-  // For a more robust handling of button 19, you might need a separate flag like 'button19Held'.
-  // For now, if button 19 was the *only* one pressed, its release needs to correctly set recordButtonHeld to false.
-  // A simple way: if any of 16,17,18 are held, recordButtonHeld is true. If button 19 is the sole trigger, its release should clear it.
-  // The current logic for button 19 press sets recordButtonHeld = true.
-  // Let's refine:
-  bool b19Held = (evt.buttonIndex == 19 && evt.type == MATRIX_BUTTON_PRESSED) || (recordButtonHeld && evt.buttonIndex != 19 && button16Held == false && button17Held == false && button18Held == false); // A bit complex, better to have a dedicated button19Held
-  // Simpler approach for now, assuming button 19 is a general record toggle:
-  if (evt.buttonIndex == 19 && evt.type == MATRIX_BUTTON_RELEASED) {
-      // If only button 19 was making recordButtonHeld true
-      if (!button16Held && !button17Held && !button18Held) {
-          recordButtonHeld = false;
-      }
-  } else {
-    recordButtonHeld = button16Held || button17Held || button18Held || (evt.buttonIndex == 19 && evt.type == MATRIX_BUTTON_PRESSED);
-    if (evt.buttonIndex == 19 && evt.type == MATRIX_BUTTON_PRESSED) recordButtonHeld = true; // Ensure it's set if 19 is pressed
-  }
-  // A cleaner way for recordButtonHeld:
-  // Have a separate bool button19Held;
-  // button19Held = (evt.buttonIndex == 19) ? (evt.type == MATRIX_BUTTON_PRESSED) : button19Held;
-  // recordButtonHeld = button16Held || button17Held || button18Held || button19Held;
+  
+
+
+    recordButtonHeld = button16Held || button17Held || button18Held ;
+  
+  // recordButtonHeld = button16Held || button17Held || button18Held ;
   // For now, the individual button presses for 16,17,18 already set recordButtonHeld = true.
   // The release logic needs to be careful.
   // If any of 16,17,18 are released, we need to check if others are still held.
-  if (evt.type == MATRIX_BUTTON_RELEASED && (evt.buttonIndex == 16 || evt.buttonIndex == 17 || evt.buttonIndex == 18 || evt.buttonIndex == 19)) {
-    // Check if any other record-related button is still held
-    // Assuming button 19's state is implicitly managed by 'recordButtonHeld' for now
-    // This is still a bit tricky without a dedicated button19Held flag.
-    // The simplest fix for the provided code structure:
-    // When 16, 17, or 18 is released, only set recordButtonHeld to false if NO OTHER of these are held AND button 19 is not considered held.
-    // The original issue was that releasing one (e.g. 16) would set recordButtonHeld=false even if 17 was still held.
-    // The parameter recording itself doesn't use recordButtonHeld, but seq.advanceStep does.
-    // Let's defer the full fix for recordButtonHeld to keep focus, but the user should be aware.
 }}
 
 // -----------------------------------------------------------------------------
@@ -441,6 +410,7 @@ void handle_bpm_led(uint32_t tick) {
 void onSync24Callback(uint32_t tick) {
   usb_midi.sendRealTime(midi::Clock);
   handle_bpm_led(tick);
+  seq.tickNoteDuration();
 }
 
 void onClockStart() {
@@ -477,59 +447,15 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
   //  Serial.print(step); Serial.print(", wrapped step for sequencer: ");
   //  Serial.println(wrapped_step);
 
-  // Advance the sequencer to the current step.
-  // The recordButtonHeld flag is passed for potential live recording of gate/note on.
-  seq.advanceStep(wrapped_step, mm, recordButtonHeld); 
-
+  // Advance the sequencer, passing all necessary external states
+  seq.advanceStep(wrapped_step, mm,
+                  recordButtonHeld, button16Held, button17Held, button18Held,
+                  selectedStepForEdit);
+                  
   // --- One-shot parameter record at the beginning of each step ---
   static int lastStepIndex = -1;
-  if (wrapped_step != lastStepIndex) {
-    // Check if no step is selected for manual editing AND the current step's gate is active
-    if (selectedStepForEdit == -1 && seq.getStep(wrapped_step).gate) {
-#ifndef DEBUG
-      Serial.print("[LIVE_REC] Step: "); Serial.print(wrapped_step);
-      Serial.print(", Gate: ON");
-      Serial.print(", mm: "); Serial.print(mm);
-      Serial.print(", b16H: "); Serial.print(button16Held);
-      Serial.print(", b17H: "); Serial.print(button17Held);
-      Serial.print(", b18H: "); Serial.println(button18Held);
-#endif
-      // Record parameters if their respective buttons are held
-      if (button16Held) { // Note recording
-        int mmNote = map(mm, 0, 1400, 0, 36); // Same mapping as UI
-        mmNote = constrain(mmNote, 0, 36);
-        seq.setStepNote(wrapped_step, mmNote);
-#ifndef DEBUG
-        Serial.print("  -> Note mapped: "); Serial.println(mmNote);
-#endif
-      }
-      if (button17Held) { // Velocity recording
-        int mmVelocity = map(mm, 0, 1400, 0, 127); // Same mapping as UI
-        mmVelocity = constrain(mmVelocity, 0, 127);
-        seq.setStepVelocity(wrapped_step, mmVelocity_mapped);
-#ifndef DEBUG
-        Serial.print("  -> Velo mapped: "); Serial.println(mmVelocity);
-#endif
-      }
-      if (button18Held) { // Filter frequency recording
-        // The UI handler maps to 0-5000 Hz.
-        // seq.setStepFiltFreq expects a float 0.0f to 1.0f if it's a normalized value,
-        // or the direct Hz value if that's how Sequencer handles it.
-        // Assuming Sequencer expects direct Hz based on loop1()
-        int mmFiltFreq = map(mm, 0, 1400, 0, 2000); // Same mapping as UI
-        mmFiltFreq_mapped = constrain(mmFiltFreq, 0, 2000);
-        seq.setStepFiltFreq(wrapped_step, (float)mmFiltFreq); // Pass as float Hz
-#ifndef DEBUG
-        Serial.print("  -> Filt mapped: "); Serial.println(mmFiltFreq);
-#endif
-      }
-    }
-    lastStepIndex = wrapped_step;
-  }
+  
 
-  // Parameter editing is now handled in loop1() for the selected step.
-
-  // separator for logs
 }
 
 // -----------------------------------------------------------------------------
@@ -638,10 +564,6 @@ void setup1() {
     Serial.print("... MPR121 is Rockin!....");
 #endif
   }
-#ifndef DEBUG
-  Serial.println("..");
-#endif
-  delay(222);
 
   Matrix_init(&touchSensor);
   Matrix_setEventHandler(matrixEventHandler); // Register the event handler
@@ -650,12 +572,19 @@ void setup1() {
 #ifndef DEBUG
   Serial.println("Core 1: Setup1 complete.");
 #endif
-  delay(500);
+  delay(100);
         seq.setStepFiltFreq(0, 1222.f);
         seq.setStepFiltFreq(8, 888.f); 
             seq.setStepFiltFreq(12, 500.f);
-        seq.setStepFiltFreq(4, 1000.f);
-        seq.setStepNote(8, 7);
+        seq.setStepFiltFreq(2, 1000.f);       seq.setStepFiltFreq(1, 1222.f);
+        seq.setStepFiltFreq(3, 888.f); 
+            seq.setStepFiltFreq(12, 500.f);
+        seq.setStepFiltFreq(6, 888.f);
+        seq.setStepNote(4, 2);
+        seq.setStepNote(12, 4);
+        seq.setStepNote(8, 3); seq.setStepNote(1, 2);
+        seq.setStepNote(2, 8);
+        seq.setStepNote(6, 2);
 }
 
 // ------------------------------------------------------------------------
@@ -681,58 +610,7 @@ void loop() {
     give_audio_buffer(producer_pool, buf);
   }
 }
-
-void loop1() {
-  usb_midi.read();
-
-  unsigned long currentMillis = millis();
-
-  if (currentMillis - previousMillis >= 1) {
-    update();
-
-    previousMillis = currentMillis;
-    Matrix_scan(); // Add this line to process touch matrix events
-    // --- Parameter Editing Logic for Selected Step ---
-    // --- Real-time Parameter Editing for Selected Step ---
-    if (selectedStepForEdit != -1) {
-      // PITCH_BUTTON (Pad 16)
-      if (button16Held) {
-        mmNote = map(mm, 0, 1400, 0, 36); // Map Lidar to scale index or MIDI note
-        seq.setStepNote(selectedStepForEdit, mmNote);
-#ifndef DEBUG
-        Serial.print("[PARAM] Step ");
-        Serial.print(selectedStepForEdit);
-        Serial.print(" note set to ");
-        Serial.println(mmNote);
-#endif
-      }
-      // VELOCITY_BUTTON (Pad 17)
-      if (button17Held) {
-        mmVelocity = map(mm, 0, 1400, 0, 127); // Map Lidar to velocity
-        seq.setStepVelocity(selectedStepForEdit, mmVelocity);
-#ifndef DEBUG
-        Serial.print("[PARAM] Step ");
-        Serial.print(selectedStepForEdit);
-        Serial.print(" velocity set to ");
-        Serial.println(mmVelocity);
-#endif
-      }
-      // FILTER_BUTTON (Pad 18)
-      if (button18Held) {
-        mmFiltFreq = map(mm, 0, 1400, 0, 5000); // Map Lidar to filter cutoff (Hz)
-        seq.setStepFiltFreq(selectedStepForEdit, mmFiltFreq);
-#ifndef DEBUG
-        Serial.print("[PARAM] Step ");
-        Serial.print(selectedStepForEdit);
-        Serial.print(" filter freq set to ");
-        Serial.println(mmFiltFreq);
-#endif
-      }
-      // PARAM4_BUTTON (Pad index TBD)
-      // Example: if (button19Held) { /* map and set param4 here */ }
-      // Placeholder for custom parameter 4
-    }
-  }
+void doLEDStuff() {
 
   // --- LED Pulsing Cyan Feedback for Selected Step ---
   static int lastSelectedStep = -1;
@@ -768,4 +646,17 @@ void loop1() {
     ledWasActive = false;
     lastSelectedStep = -1;
   }
+}
+void loop1() {
+  usb_midi.read();
+
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - previousMillis >= 1) {
+    update();
+doLEDStuff();
+    previousMillis = currentMillis;
+    Matrix_scan(); // Add this line to process touch matrix events
+  
+}
 }
