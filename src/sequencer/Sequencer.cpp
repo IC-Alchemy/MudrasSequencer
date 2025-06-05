@@ -73,7 +73,7 @@ void Sequencer::initializeSteps() {
     for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
         state.steps[i] = Step(); // Default initialization
         state.steps[i].note = 0;
-        state.steps[i].filter = 0.5f; // Default filter value as float (matches SequencerDefs.h change)
+        state.steps[i].filter = 600.5f; // Default filter value as float (matches SequencerDefs.h change)
 
         state.steps[i].gate = true; // All gates off initially
             // Serial.print("  Step "); Serial.print(i);
@@ -153,25 +153,29 @@ void Sequencer::reset() {
  * - If the new step is ON, send noteOn for the current note, set oscillator frequency, and trigger the envelope.
  * - If the new step is OFF, send noteOff for the last note (if any) and release the envelope.
  * - Handle repeated notes by sending noteOff then noteOn, even if the note is the same.
- * - Modular, robust, and well-documented.
+ 
  * @param current_uclock_step The current step number (0-15) provided by uClock.
  */
 void Sequencer::advanceStep(uint8_t current_uclock_step) {
     if (!state.running) {
         return;
     }
-        releaseEnvelope(); // Sets trigenv1 = false
+        
     // Wrap step index to sequencer length
  state.playhead = current_uclock_step;
     Step &currentStep = state.steps[state.playhead];
-    if (lastNote >= 0) {
-        // usb_midi.sendNoteOff(lastNote, 0, 1); // Channel 1, velocity 0
-    }
+  
+  if (lastNote >= 0) {
+
+         usb_midi.sendNoteOff(lastNote, 0, 1); // Channel 1, velocity 0
+  
+  }
 
     
     if (currentStep.gate) {
         // Clamp note index to scale size
-        uint8_t scaleIndex = (currentStep.note >= scaleSize) ? 0 : currentStep.note;
+    
+  uint8_t scaleIndex = (currentStep.note >= scaleSize) ? 0 : currentStep.note;
   // Ensure scaleIndex is valid for the actual 'scale' array bounds.
         if (scaleIndex >= SCALE_ARRAY_SIZE) { // Defensive check
             scaleIndex = 0; 
@@ -195,7 +199,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step) {
 vel1=currentStep.velocity;
         // Optionally: apply currentStep.filter to synth engine here
         // Optionally: apply currentStep.filter to synth engine here
-    freq1 = currentStep.filter*1.f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
+    freq1 = currentStep.filter; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
 
         lastNote = new_midi_note; // Update lastNote to the currently playing MIDI note.
     } else {
@@ -248,6 +252,8 @@ void Sequencer::setOscillatorFrequency(uint8_t midiNote)
  * @brief Trigger the envelope for noteOn.
  * Replace this stub with your actual envelope control logic.
  */
+
+
 void Sequencer::triggerEnvelope() {
     trigenv1 = true;
     trigenv2 = true;
@@ -261,6 +267,7 @@ void Sequencer::releaseEnvelope() {
     trigenv1 = false;
     trigenv2 = false;
 }
+
 // ToggleStep
 void Sequencer::toggleStep(uint8_t stepIdx) {
     if (stepIdx >= SEQUENCER_NUM_STEPS) {
@@ -276,8 +283,9 @@ void Sequencer::toggleStep(uint8_t stepIdx) {
  * @param stepIdx Index of the step.
  * @param noteIndex Scale index for the step.
  */
+
 void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
-    // Serial.print("[SEQ] setStepNote called for index: "); Serial.print(stepIdx); Serial.print(", noteIndex: "); Serial.println(noteIndex);
+   
     if (stepIdx >= SEQUENCER_NUM_STEPS) {
         // Serial.println("  - Invalid step index. Returning.");
         return;
@@ -287,13 +295,18 @@ void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
     // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);
 }
 
-void Sequencer::setStepVelocity(uint8_t stepIdx, uint8_t velocityByte) { // velocityByte is 0-127
+void Sequencer::setStepVelocity(uint8_t stepIdx, float velocity) { 
+
+// velocityByte is 0-127
+
     if (stepIdx >= SEQUENCER_NUM_STEPS) {
         return;
     }
-    // Convert 0-127 byte to 0.0f-1.0f float
-    state.steps[stepIdx].velocity = static_cast<float>(velocityByte) / 127.0f;
+  
+    state.steps[stepIdx].velocity = velocity;
 }
+
+
 void Sequencer::setStepFiltFreq(uint8_t stepIdx, float filter) {
  
     if (stepIdx >= SEQUENCER_NUM_STEPS) {
@@ -304,6 +317,10 @@ void Sequencer::setStepFiltFreq(uint8_t stepIdx, float filter) {
     // Serial.print("  - Step "); Serial.print(stepIdx);
     // Serial.print(" new note index: "); Serial.println(state.steps[stepIdx].note);
 }
+
+
+
+
 /**
  * @brief Set full step data using individual parameters.
  */
