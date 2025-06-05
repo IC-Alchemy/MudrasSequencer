@@ -5,10 +5,10 @@ LEDMatrix::LEDMatrix() {
 }
 
 void LEDMatrix::begin(uint8_t brightness) {
-    // FastLED setup for parallel or SPI-based matrix
+    // FastLED setup for WS2812B-style LEDs (serial protocol).
     FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, WIDTH * HEIGHT);
     FastLED.setBrightness(brightness);
-    clear();
+    clear(); // Initialize all LEDs to off
     show();
 }
 

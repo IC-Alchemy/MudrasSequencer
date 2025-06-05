@@ -3,12 +3,15 @@
  * @brief Modular 16-step sequencer class interface.
  *
  * Provides a step sequencer with step toggle, note assignment, playhead
- * advance, and state query. Designed for integration with matrix scanning and
- * output modules (MIDI, gate).
+ * advance, and state query. It receives dependencies like the MIDI interface
+ * and musical scale data via its constructor.
  *
  * Example:
  *   #include "Sequencer.h"
- *   Sequencer seq;
+ *   #include "SynthState.h" // For g_synthVoiceState
+ *   // ... other includes and global objects for MIDI, scale ...
+ *   Sequencer seq(usb_midi_interface, scale_array);
+ *
  *   // Initialize and start
  *   if (!seq.init()) { Serial.println("Sequencer init failed"); }
  *   seq.start();
@@ -16,14 +19,11 @@
  *   // Configure steps
  *   // step 0: gate on, slide off, note index 8, velocity 0.75, filter 0.3
  *   seq.setStep(0, true, false, 8, 0.75f, 0.3f);
- *   // step 1 using Step object
- *   seq.setStep(1, Step(true, true, 12, 1.0f, 0.5f));
  *
  *   // In clock callback
- *   void onClockTick(uint8_t beat) {
- *       seq.advanceStep(beat);
- *       const Step& stepData = seq.getStep(beat);
- *       // Use stepData.gate, stepData.note, stepData.velocity, stepData.filter
+ *   void onClockTick(uint8_t uclock_step) { // uclock_step is the uClock's current step
+ *       seq.advanceStep(uclock_step); // Sequencer updates g_synthVoiceState
+ *       // g_synthVoiceState can now be used by the audio engine
  *   }
  */
 
@@ -31,20 +31,32 @@
 #define SEQUENCER_H
 
 #include "SequencerDefs.h"
-extern volatile bool trigenv1;
-extern volatile bool trigenv2;
-#include <Adafruit_TinyUSB.h>
-#include <MIDI.h>
+#include <Adafruit_TinyUSB.h> // For MIDI types if not fully opaque
+#include <MIDI.h>             // For MIDI types if not fully opaque
+#include "../SynthState.h"    // For SynthVoiceState
+
+// Make g_synthVoiceState available to the sequencer (defined in main .ino)
+extern volatile SynthVoiceState g_synthVoiceState;
 
 #define SEQUENCER_NUM_STEPS 16
 
-extern midi::MidiInterface<midi::SerialMIDI<Adafruit_USBD_MIDI>> usb_midi;
+// Type alias for the scale array reference
+using ScaleArrayRefType = const int (&)[5][48];
 
 class Sequencer {
 public:
-  Sequencer();
+  /**
+   * @brief Constructor for the Sequencer.
+   * @param midi_interface Reference to the MIDI interface for sending MIDI messages.
+   * @param scale_data Reference to the array defining musical scales.
+   */
+  Sequencer(midi::MidiInterface<midi::SerialMIDI<Adafruit_USBD_MIDI>>& midi_interface, ScaleArrayRefType scale_data);
 
-  // Instantly play a step for real-time feedback (does not advance playhead)
+  /**
+   * @brief Instantly plays a step for real-time feedback. Does not advance the main playhead.
+   * Updates g_synthVoiceState with the parameters of the specified step.
+   * @param stepIdx The index of the step to play (0 to SEQUENCER_NUM_STEPS - 1).
+   */
   void playStepNow(uint8_t stepIdx);
 
   /**
@@ -78,16 +90,39 @@ public:
   // Toggle step ON/OFF
   void toggleStep(uint8_t stepIdx);
 
-  // Set note for a step
+  /**
+   * @brief Set the note for a specific step.
+   * @param stepIdx Index of the step (0 to SEQUENCER_NUM_STEPS - 1).
+   * @param note Note value for the step (typically a scale index, 0-24 or similar).
+   */
   void setStepNote(uint8_t stepIdx, uint8_t note);
-void setStepVelocity(uint8_t stepIdx, uint8_t velocity);
-void setStepFiltFreq(uint8_t stepIdx, float filter);
+
+  /**
+   * @brief Set the velocity for a specific step.
+   * @param stepIdx Index of the step (0 to SEQUENCER_NUM_STEPS - 1).
+   * @param velocity Velocity value for the step (normalized float 0.0f - 1.0f).
+   */
+  void setStepVelocity(uint8_t stepIdx, float velocity);
+
+  /**
+   * @brief Set the filter cutoff for a specific step.
+   * @param stepIdx Index of the step (0 to SEQUENCER_NUM_STEPS - 1).
+   * @param filter Filter value for the step (normalized float 0.0f - 1.0f).
+   */
+  void setStepFiltFreq(uint8_t stepIdx, float filter);
+
   // Set full step data (overloads)
+  // TODO: Review Doxygen for these setStep overloads if they are primary interaction points.
   void setStep(int index, bool gate, bool slide, int note, float velocity, float filter);
   void setStep(int index, const Step& stepData);
 
-// Convert absolute MIDI note (0-127) to the semitone-offset scheme used by the audio thread
-    void setOscillatorFrequency(uint8_t midiNote);
+  /**
+   * @brief Sets the synth's current note directly. Used by playStepNow or external MIDI input.
+   * This updates g_synthVoiceState.note.
+   * @param midiNote The MIDI note value (0-127).
+   */
+  void setOscillatorFrequency(uint8_t midiNote); // Name is a bit misleading, it sets the MIDI note.
+
   // Query step and playhead state
   const Step &getStep(uint8_t stepIdx) const;
   uint8_t getPlayhead() const;
@@ -103,6 +138,8 @@ void triggerEnvelope();
 
 
 private:
+  midi::MidiInterface<midi::SerialMIDI<Adafruit_USBD_MIDI>>& midi_interface_;
+  ScaleArrayRefType scale_data_;
   // Sequencer state now stored in SequencerState from SequencerDefs.h
   void resetState();
   void initializeSteps();

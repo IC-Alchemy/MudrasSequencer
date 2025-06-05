@@ -100,6 +100,7 @@ void Matrix_setRisingEdgeHandler(void (*handler)(uint8_t buttonIndex)) {
 }
 
 void Matrix_printState() {
+#ifdef DEBUG
   Serial.println("Button Matrix State (1=pressed, 0=not pressed):");
   for (uint8_t row = 0; row < 4; ++row) {
     for (uint8_t col = 0; col < 8; ++col) {
@@ -109,4 +110,5 @@ void Matrix_printState() {
     Serial.println();
   }
   Serial.println();
+#endif // DEBUG
 }
