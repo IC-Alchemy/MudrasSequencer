@@ -125,7 +125,9 @@ void Sequencer::reset() {
  * - Modular, robust, and well-documented.
  * @param current_uclock_step The current step number (0-15) provided by uClock.
  */
-void Sequencer::advanceStep(uint8_t current_uclock_step, int mm, bool recordButtonHeld) {
+void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
+                   bool is_button16_held, bool is_button17_held, bool is_button18_held,
+                   int current_selected_step_for_edit) {
   // Always send NoteOff for the last note before starting a new one (monophonic)
     if (currentNote >= 0) {
         handleNoteOff();
@@ -136,7 +138,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step, int mm, bool recordButt
  Step &currentStep = state.steps[state.playhead];
 
  // --- Auto-write distance sensor to step if no step is selected for edit and gate is high ---
- if (recordButtonHeld && selectedStepForEdit == -1 && currentStep.gate) {
+ if (selectedStepForEdit == -1 && currentStep.gate) {
      // Only record one type of data at a time, based on which record button is held
 
          if (button16Held) {

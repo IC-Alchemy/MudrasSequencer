@@ -26,7 +26,6 @@
 #include <cmath>
 #include <cstdint>
 //  #define DEBUG
-#warning "ladder.h included"
 
 // --- Sequencer ---
 #include "src/sequencer/Sequencer.h"
@@ -417,7 +416,6 @@ void onClockStart() {
   Serial.println("[uCLOCK] onClockStart() called.");
   usb_midi.sendRealTime(midi::Start); // MIDI Start message
   seq.start();
-  seq.advanceStep(0, mm, 0); // Immediately trigger the first step so sound is produced at startup
 }
 
 void onClockStop() {

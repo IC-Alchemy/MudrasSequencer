@@ -65,7 +65,7 @@ public:
    * @param current_uclock_step The current step number (0-15) provided by uClock.
    */
   void advanceStep(uint8_t current_uclock_step, int mm_distance,
-                   bool is_record_button_held, bool is_button16_held, bool is_button17_held, bool is_button18_held,
+                    bool is_button16_held, bool is_button17_held, bool is_button18_held,
                    int current_selected_step_for_edit);
 
   // Toggle step ON/OFF
