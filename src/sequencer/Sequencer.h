@@ -117,7 +117,7 @@ public:
      * @param note MIDI note number to play.
      * @param duration Number of ticks the note should last.
      */
-    void startNote(uint8_t note, uint16_t duration);
+    void startNote(uint8_t note, float velocity, uint16_t duration);
 
     /**
      * @brief Decrement the note duration counter. If zero, sends NoteOff and clears state.

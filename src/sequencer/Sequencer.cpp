@@ -142,19 +142,19 @@ void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
      // Only record one type of data at a time, based on which record button is held
 
          if (button16Held) {
-             int mmNote = map(mm, 0, 1400, 0, 36);
+             int mmNote = map(mm, 0, 1400, 0, 24);
              if (mmNote < 0) mmNote = 0;
-             if (mmNote > 36) mmNote = 36;
+             if (mmNote > 24) mmNote = 24;
              currentStep.note = mmNote;
          }  if (button17Held) {
-             int mmVelocity = map(mm, 0, 1400, 0, 127);
+             int mmVelocity = map(mm, 0, 1400, 0, 1000);
              if (mmVelocity < 0) mmVelocity = 0;
-             if (mmVelocity > 127) mmVelocity = 127;
-             currentStep.velocity = mmVelocity / 127.0f;
+             if (mmVelocity > 1000) mmVelocity = 1000;
+             currentStep.velocity = mmVelocity / 1000.0f;
          }  if (button18Held) {
-             int mmFiltFreq = map(mm, 0, 1400, 0, 4000);
+             int mmFiltFreq = map(mm, 0, 1400, 0, 2000);
              if (mmFiltFreq < 0) mmFiltFreq = 0;
-             if (mmFiltFreq > 5000) mmFiltFreq = 4000;
+             if (mmFiltFreq > 2000) mmFiltFreq = 2000;
              currentStep.filter = mmFiltFreq ;
          }
     
@@ -164,6 +164,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
 
     if (currentStep.gate) {
         // Clamp note index to scale size
+        
         uint8_t scaleIndex = (currentStep.note >= scaleSize) ? 0 : currentStep.note;
         if (scaleIndex >= SCALE_ARRAY_SIZE) { // Defensive check
             scaleIndex = 0;
@@ -181,7 +182,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
         freq1 = currentStep.filter * 1.f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
 
         // Start the note with a fixed duration (e.g., 24 ticks for a 16th note at 96 PPQN)
-        startNote(new_midi_note, 24);
+        startNote(new_midi_note,vel1, 24);
 
         lastNote = new_midi_note; // Update lastNote to the currently playing MIDI note.
     } else {
@@ -380,11 +381,11 @@ const SequencerState& Sequencer::getState() const {
  * @param note MIDI note number to play.
  * @param duration Number of ticks the note should last.
  */
-void Sequencer::startNote(uint8_t note, uint16_t duration) {
+void Sequencer::startNote(uint8_t note,float velocity, uint16_t duration) {
     currentNote = note;
     noteDurationCounter = duration;
     // Send NoteOn (velocity hardcoded to 100 for now, channel 1)
-    usb_midi.sendNoteOn(currentNote, 100, 1);
+    usb_midi.sendNoteOn(currentNote, velocity*127, 1);
 }
 
 /**
