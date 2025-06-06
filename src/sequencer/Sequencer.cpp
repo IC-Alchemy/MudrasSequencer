@@ -4,7 +4,7 @@
  *
  * Handles step state, playhead advance, step toggling, and note assignment.
  * Designed for integration with matrix scanning and output modules (MIDI,
- * gate).
+ * gate
  *
  * Usage:
  *   See Sequencer.h for interface and example.

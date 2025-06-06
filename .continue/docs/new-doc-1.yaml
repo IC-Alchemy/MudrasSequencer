@@ -1,6 +1,0 @@
-name: fastled
-version: 0.0.1
-schema: v1
-docs:
-  - name: New docs
-    startUrl: https://fastled.io/docs/

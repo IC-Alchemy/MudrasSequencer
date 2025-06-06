@@ -2,7 +2,7 @@
 #define LEDMATRIX_H
 
 #include <Arduino.h>
-#include <FastLED.h>
+#include <Adafruit_NeoPixel.h>
 
 class LEDMatrix {
 public:

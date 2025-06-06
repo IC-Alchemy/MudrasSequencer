@@ -128,8 +128,7 @@ float baseFreq = 110.0f; // Hz
 constexpr float OSC_DETUNE_FACTOR = 1.01f;
 
 // --- Oscillators & Envelopes ---
-daisysp::Oscillator osc1, osc2, osc3, osc4, osc5, osc6, osc7, osc8;
-daisysp::Adsr env1, env2;
+daisysp::Oscillator osc1, osc2, osc3, osc4;
 daisysp::LadderFilter filter;
 // --- Audio Buffer Pool ---
 audio_buffer_pool_t *producer_pool = nullptr;
