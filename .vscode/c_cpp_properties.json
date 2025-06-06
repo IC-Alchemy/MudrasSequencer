@@ -2,16 +2,27 @@
   "version": 4,
   "configurations": [
     {
-      "name": "gcc-arm",
-      "compilerPath": "gcc",
+      "name": "windows-gcc-arm64",
+      "compilerPath": "C:/ST/STM32CubeCLT_1.18.0/GNU-tools-for-STM32/bin/arm-none-eabi-gcc.exe",
       "compilerArgs": [],
-      "intelliSenseMode": "clang-arm",
+      "intelliSenseMode": "windows-gcc-arm64",
       "includePath": [
-        "${workspaceFolder}/**"
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/src",
+        "${workspaceFolder}/src/audio",
+        "${workspaceFolder}/src/dsp",
+        "${workspaceFolder}/src/matrix",
+        "${workspaceFolder}/src/sequencer",
+        "${workspaceFolder}/src/encoders",
+        "${workspaceFolder}/src/gate",
+        "${workspaceFolder}/src/audio/include",
+        "${workspaceFolder}/.pio/libdeps/raspberry-pi-pico",
+        "C:/Users/Blasto/Documents/Arduino/hardware/raspberrypi/1.14.0/cores/rp2040",
+        "C:/Users/Blasto/Documents/Arduino/hardware/raspberrypi/1.14.0/variants/pico"
       ],
       "forcedInclude": [],
-      "cStandard": "${default}",
-      "cppStandard": "${default}",
+      "cStandard": "c11",
+      "cppStandard": "c++17",
       "defines": [
         "_DEBUG",
         "UNICODE",
@@ -35,7 +46,8 @@
         "-fno-exceptions"
       ],
       "intelliSenseMode": "gcc-arm",
-      "includePath": [  "${workspaceFolder}/**",
+      "includePath": [
+        "${workspaceFolder}/**",
         "C:\\Users\\Blasto\\AppData\\Local\\Arduino15\\packages\\rp2040\\hardware\\rp2040\\4.5.2\\include",
         "C:\\Users\\Blasto\\AppData\\Local\\Arduino15\\packages\\rp2040\\hardware\\rp2040\\4.5.2\\cores\\rp2040",
         "C:\\Users\\Blasto\\AppData\\Local\\Arduino15\\packages\\rp2040\\hardware\\rp2040\\4.5.2\\variants\\generic_rp2350",

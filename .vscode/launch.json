@@ -11,7 +11,7 @@
       "cwd": "x:/CodePCB/Code/Pico/Mine/Mudras2/Pico2DSP2CoreWorks/src/sequencer",
       "program": "x:/CodePCB/Code/Pico/Mine/Mudras2/Pico2DSP2CoreWorks/src/sequencer/build/Debug/outDebug",
       "MIMode": "gdb",
-      "miDebuggerPath": "gdb",
+      "miDebuggerPath": "arm-none-eabi-gdb",
       "setupCommands": [
         {
           "description": "Enable pretty-printing for gdb",
