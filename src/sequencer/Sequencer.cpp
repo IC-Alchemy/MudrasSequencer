@@ -62,7 +62,7 @@ void Sequencer::initializeSteps() {
         state.steps[i].note = 0;
         state.steps[i].gate = true; // All gates ON
         state.steps[i].velocity = 100.0f / 127.0f; // Velocity at 100 (MIDI scale)
-        state.steps[i].filter = random(200,1000)/1000.0f; // Filter freq at 2000 Hz (normalized)
+        state.steps[i].filter = random(200,1000); // Filter freq at 2000 Hz (normalized)
         // Serial.print("  Step "); Serial.print(i);
         // Serial.print(": ON, Note Index: "); Serial.println(state.steps[i].note);
         // Serial.print("  Step "); Serial.print(i);
@@ -395,6 +395,7 @@ void Sequencer::tickNoteDuration() {
         --noteDurationCounter;
         if (noteDurationCounter == 0) {
             handleNoteOff();
+            releaseEnvelope();
         }
     }
 }

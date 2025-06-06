@@ -1,3 +1,5 @@
+#include <Adafruit_NeoPixel.h>
+
 // ==========================
 //      Pico2DSP2CoreWorks
 //   Refactored & Organized
@@ -43,7 +45,6 @@
 // --- Touch Matrix ---
 #include "src/matrix/Matrix.h"
 #include <Adafruit_MPR121.h> // https://github.com/adafruit/Adafruit_MPR121_Library
-
  // -----------------------------------------------------------------------------
 // 2. CONSTANTS & GLOBALS
 // -----------------------------------------------------------------------------
@@ -54,7 +55,6 @@ volatile int selectedStepForEdit = -1; // -1 means no step selected
 volatile int raw_mm = 0;
 volatile int mm = 0;
 Melopero_VL53L1X sensor;
-
 // --- I2S Pin Configuration ---
 #define PICO_AUDIO_I2S_DATA_PIN 15
 #define PICO_AUDIO_I2S_CLOCK_PIN_BASE 16
@@ -179,8 +179,8 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
      // 1. Set Oscillator Frequencies based on note1 (from sequencer)
     float osc_base_freq = daisysp::mtof(note1); // note1 is MIDI note from sequencer
     osc1.SetFreq(osc_base_freq);
-    osc2.SetFreq(osc_base_freq * 1.003f); // Slight detune
-    osc3.SetFreq(osc_base_freq * 0.997f); // Slight detune
+    osc2.SetFreq(osc_base_freq * 1.009f); // Slight detune
+    osc3.SetFreq(osc_base_freq * 0.998f); // Slight detune
 
     // 2. Process Amplitude Envelope (env1) based on trigenv1 (from sequencer gate)
     // current_amp_env_value will be 0.0 to 1.0
@@ -190,7 +190,7 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
     // freq1 is expected to be in Hz (e.g., 0-5000 Hz from Lidar mapping)
     // Ensure a minimum cutoff frequency.
     float target_filter_freq = daisysp::fmax(20.f, freq1); 
-    filter.SetFreq(target_filter_freq);
+    filter.SetFreq(target_filter_freq*current_amp_env_value);  //*current_amp_env_value);
 
     // 4. Generate and sum oscillator outputs
     float osc_sum = osc1.Process() + osc2.Process() + osc3.Process();
@@ -200,7 +200,7 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
     // 6. Apply amplitude envelope and step velocity to the filtered signal
     // vel1 is 0.0 to 1.0 from sequencer step's velocity
-    float final_audio_signal = filtered_signal;// * current_amp_env_value;
+    float final_audio_signal = filtered_signal*vel1;//* (current_amp_env_value*1.1f);// * current_amp_env_value;
 
     // 7. Scale for output (0.5f was the previous scaling factor)
     float sumL = final_audio_signal * 0.5f;
@@ -234,8 +234,8 @@ void initOscillators() {
   filter.SetRes(0.6f);
   filter.SetInputDrive(2.5f);
   filter.SetPassbandGain(0.25f);
-  env1.SetReleaseTime(.11f);
-  env1.SetAttackTime(0.0226f);
+  env1.SetReleaseTime(.07f);
+  env1.SetAttackTime(0.0016f);
   env2.SetAttackTime(0.001f);
   env1.SetDecayTime(0.05f);
   env2.SetDecayTime(0.121f);
@@ -312,14 +312,12 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
         break;
       case 17: // Button 17 (Velocity)
         button17Held = true;   
-             recordButtonHeld = true;
 #ifndef DEBUG
         Serial.println("[MATRIX] Button 17 (Velocity) held.");
 #endif
         break;
       case 18: // Button 18 (Filter)
         button18Held = true;
-                recordButtonHeld = true;
 #ifndef DEBUG
         Serial.println("[MATRIX] Button 18 (Filter) held.");
 #endif
@@ -371,7 +369,6 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
   
 
 
-    recordButtonHeld = button16Held || button17Held || button18Held ;
   
   // recordButtonHeld = button16Held || button17Held || button18Held ;
   // For now, the individual button presses for 16,17,18 already set recordButtonHeld = true.
@@ -393,22 +390,10 @@ void setStepLedColor(uint8_t step, uint8_t r, uint8_t g, uint8_t b) {
   // This is a stub for integration with your LED hardware.
 }
 
-void handle_bpm_led(uint32_t tick) {
-  // BPM led indicator
-  if (!(tick % 96) || (tick == 1)) {
-    bpm_blink_timer = 8;
-    ledOn();
-  } else if (!(tick % 24)) {
-    bpm_blink_timer = 1;
-    ledOn();
-  } else if (!(tick % bpm_blink_timer)) {
-    ledOff();
-  }
-}
+
 
 void onSync24Callback(uint32_t tick) {
   usb_midi.sendRealTime(midi::Clock);
-  handle_bpm_led(tick);
   seq.tickNoteDuration();
 }
 
@@ -444,10 +429,9 @@ void onStepCallback(uint32_t step) { // uClock provides the current step number
   //  Serial.print("[uCLOCK] onStepCallback, uClock raw step: ");
   //  Serial.print(step); Serial.print(", wrapped step for sequencer: ");
   //  Serial.println(wrapped_step);
-
   // Advance the sequencer, passing all necessary external states
   seq.advanceStep(wrapped_step, mm,
-                  recordButtonHeld, button16Held, button17Held, button18Held,
+                   button16Held, button17Held, button18Held,
                   selectedStepForEdit);
                   
   // --- One-shot parameter record at the beginning of each step ---
@@ -510,6 +494,7 @@ void setup1() {
   // handling USB.
   TinyUSB_Device_Init(0);
 #endif
+  usb_midi.begin(MIDI_CHANNEL_OMNI);
 
   delay(random(333));
   randomSeed(
@@ -518,8 +503,7 @@ void setup1() {
 
   // initOLED();
 #ifndef DEBUG
-  Serial.begin(115200);
-  Serial.print(" CORE1 SETUP1 ... ");
+Serial.print(" CORE1 SETUP1 ... ");
    delay(500);
 #endif
   VL53L1_Error status = 0;
@@ -537,7 +521,6 @@ void setup1() {
   Serial.print(" ...Distance Sensor Initialized... ");
 #endif
 
-  usb_midi.begin(MIDI_CHANNEL_OMNI);
 
   // Setup clock system
   uClock.init();
@@ -578,11 +561,39 @@ void setup1() {
         seq.setStepFiltFreq(3, 888.f); 
             seq.setStepFiltFreq(12, 500.f);
         seq.setStepFiltFreq(6, 888.f);
-        seq.setStepNote(4, 2);
-        seq.setStepNote(12, 4);
-        seq.setStepNote(8, 3); seq.setStepNote(1, 2);
-        seq.setStepNote(2, 8);
+        seq.setStepNote(1, 0);
+        seq.setStepNote(2, 1);
+        seq.setStepNote(3, 2);
+        seq.setStepNote(4, 0);
+        seq.setStepNote(5, 1);
         seq.setStepNote(6, 2);
+        seq.setStepNote(7, 3);
+        seq.setStepNote(8, 4);
+        seq.setStepNote(9, 5);
+        seq.setStepNote(10, 6);
+        seq.setStepNote(11, 7);
+        seq.setStepNote(12, 8);
+        seq.setStepNote(13, 9);
+        seq.setStepNote(14, 10);
+        seq.setStepNote(15, 11);
+        seq.setStepNote(16, 12);
+    seq.setStepVelocity(0, 0.5f);
+    seq.setStepVelocity(1, 0.5f);
+    seq.setStepVelocity(2, 0.5f);
+    seq.setStepVelocity(3, 0.5f);
+    seq.setStepVelocity(4, 0.5f);
+    seq.setStepVelocity(5, 0.5f);
+    seq.setStepVelocity(6, 0.5f);
+    seq.setStepVelocity(7, 0.5f);
+    seq.setStepVelocity(8, 0.5f);
+    seq.setStepVelocity(9, 0.5f);
+    seq.setStepVelocity(10, 0.5f);
+    seq.setStepVelocity(11, 0.5f);
+    seq.setStepVelocity(12, 0.5f);
+    seq.setStepVelocity(13, 0.5f);
+    seq.setStepVelocity(14, 0.5f);
+    seq.setStepVelocity(15, 0.5f);
+
 }
 
 // ------------------------------------------------------------------------
