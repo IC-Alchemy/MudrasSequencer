@@ -14,6 +14,8 @@
 extern volatile int note1;
 extern volatile float freq1;
 
+extern int currentScale; // Newly added scale index variable
+
 // ParameterMapping registry for distance sensor to step parameter mapping
 static ParameterMapping parameterMappings[] = {
     {
@@ -96,12 +98,7 @@ void Sequencer::initializeSteps() {
         state.steps[i].gate = true; // All gates ON
         state.steps[i].velocity = 100.0f / 127.0f; // Velocity at 100 (MIDI scale)
         state.steps[i].filter = random(200,4444); // Filter freq at 2000 Hz (normalized)
-        // Serial.print("  Step "); Serial.print(i);
-        // Serial.print(": ON, Note Index: "); Serial.println(state.steps[i].note);
-        // Serial.print("  Step "); Serial.print(i);
-        // Serial.print(": Velocity: "); Serial.println(state.steps[i].velocity);
-        // Serial.print("  Step "); Serial.print(i);
-        // Serial.print(": Filter: "); Serial.println(state.steps[i].filter);
+ 
     }
     // Clear any unused steps
     for (uint8_t i = stepLength; i < SEQUENCER_NUM_STEPS; ++i) {
@@ -117,8 +114,7 @@ void Sequencer::initializeSteps() {
  * @brief Default constructor. Initializes sequencer state to default values.
  */
 Sequencer::Sequencer() : state(), errorFlag(false), lastNote(-1) {
-    // All steps default to OFF, note 60, gate false (see Step constructor)
-    // Playhead at 0, running = false
+
 }
 
 /**
@@ -130,7 +126,7 @@ void Sequencer::start() {
 
 /**
  * @brief Stop the sequencer (clears running flag).
- *        Optionally, clear all gates (left for output module).
+ *      
  */
 void Sequencer::stop() {
     state.running = false;
@@ -156,7 +152,8 @@ void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
                    int current_selected_step_for_edit,
                    VoiceState* voiceState) {
   // Always send NoteOff for the last note before starting a new one (monophonic)
-    if (currentNote >= 0) {
+    // But delay if slide is active to allow legato/glide
+    if (currentNote >= 0 && !state.steps[state.playhead].slide) {
         handleNoteOff();
     }
     // Wrap step index to sequencer length
@@ -189,7 +186,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
        if (scaleIndex >= SCALE_ARRAY_SIZE) { // Defensive check
            scaleIndex = 0;
        }
-       int new_midi_note = MIDI_BASE_NOTE + scale[0][scaleIndex];
+       int new_midi_note = MIDI_BASE_NOTE + scale[currentScale][scaleIndex];
 
        // Update the synth engine's target note (global variable).
        note1 = new_midi_note;
@@ -232,7 +229,6 @@ void Sequencer::playStepNow(uint8_t stepIdx) {
     Velocity = static_cast<uint8_t>(currentStep.velocity * 127.0f);
     FiltFreq = currentStep.filter * 5000.0f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
 
-    // Trigger the envelope for instant feedback
 }
 
 /**
@@ -370,7 +366,31 @@ const Step &Sequencer::getStep(uint8_t stepIdx) const {
 /**
  * @brief Get the current playhead position.
  * @return Playhead index.
+void Sequencer::debugPrintStepGates() const {
+#ifdef ARDUINO
+    Serial.print("Step Gates: ");
+    for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
+        Serial.print("[");
+        Serial.print(i);
+        Serial.print("]: ");
+        Serial.print(state.steps[i].gate ? "ON" : "OFF");
+        if (i < SEQUENCER_NUM_STEPS - 1) Serial.print(", ");
+    }
+    Serial.println();
+#endif
+}
  */
+void Sequencer::debugPrintStepGates() const {
+    Serial.print("Step Gates: ");
+    for (uint8_t i = 0; i < SEQUENCER_NUM_STEPS; ++i) {
+        Serial.print("[");
+        Serial.print(i);
+        Serial.print("]: ");
+        Serial.print(state.steps[i].gate ? "ON" : "OFF");
+        if (i < SEQUENCER_NUM_STEPS - 1) Serial.print(", ");
+    }
+    Serial.println();
+}
 uint8_t Sequencer::getPlayhead() const {
     return state.playhead;
 }
