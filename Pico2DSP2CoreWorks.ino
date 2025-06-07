@@ -12,6 +12,7 @@
 #include "src/dsp/ladder.h"
 #include "src/dsp/oscillator.h"
 #include "src/dsp/phasor.h"
+#include "src/LEDMatrix/ledMatrix.h"
 #include <cmath>
 #include <cstdint>
 //  #define DEBUG
@@ -99,6 +100,9 @@ daisysp::Adsr env2;
 
 // --- Audio Buffer Pool ---
 audio_buffer_pool_t *producer_pool = nullptr;
+
+// --- LED Matrix ---
+LEDMatrix ledMatrix;
 
 // --- Timing ---
 unsigned long previousMillis = 0;
@@ -523,7 +527,7 @@ void doLEDStuff() {
 
     if (isPlayhead && gateOn) {
       // Gate state indication should override cyan pulse (example: white)
-      setStepLedColor((uint8_t)selectedStepForEdit, 255, 255, 255);
+      ledMatrix.setPixelColorInternal((uint8_t)selectedStepForEdit, CRGB(255, 255, 255));
       // Debug
       // Serial.println("[LED] Selected step is playhead and gate is ON: white.");
     } else {
@@ -533,7 +537,7 @@ void doLEDStuff() {
       uint8_t brightness = (uint8_t)(pulse * 255.0f);
 
       // Cyan: (0, brightness, brightness)
-      setStepLedColor((uint8_t)selectedStepForEdit, 0, brightness, brightness);
+      ledMatrix.setPixelColorInternal((uint8_t)selectedStepForEdit, CRGB(0, brightness, brightness));
       // Debug
       // Serial.println("[LED] Selected step LED pulsing cyan.");
     }
@@ -542,7 +546,7 @@ void doLEDStuff() {
     ledWasActive = true;
   } else if (ledWasActive && lastSelectedStep != -1) {
     // Turn off or restore LED when deselected
-    setStepLedColor((uint8_t)lastSelectedStep, 0, 0, 0);
+    ledMatrix.setPixelColorInternal((uint8_t)lastSelectedStep, CRGB(0, 0, 0));
     ledWasActive = false;
     lastSelectedStep = -1;
   }
