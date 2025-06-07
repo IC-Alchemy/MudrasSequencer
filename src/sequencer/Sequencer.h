@@ -1,36 +1,16 @@
-/**
- * @file Sequencer.h
- * @brief Modular 16-step sequencer class interface.
- *
- * Provides a step sequencer with step toggle, note assignment, playhead
- * advance, and state query. Designed for integration with matrix scanning and
- * output modules (MIDI, gate).
- *
- * Example:
- *   #include "Sequencer.h"
- *   Sequencer seq;
- *   // Initialize and start
- *   if (!seq.init()) { Serial.println("Sequencer init failed"); }
- *   seq.start();
- *
- *   // Configure steps
- *   // step 0: gate on, slide off, note index 8, velocity 0.75, filter 0.3
- *   seq.setStep(0, true, false, 8, 0.75f, 0.3f);
- *   // step 1 using Step object
- *   seq.setStep(1, Step(true, true, 12, 1.0f, 0.5f));
- *
- *   // In clock callback
- *   void onClockTick(uint8_t beat) {
- *       seq.advanceStep(beat);
- *       const Step& stepData = seq.getStep(beat);
- *       // Use stepData.gate, stepData.note, stepData.velocity, stepData.filter
- *   }
+/*
+ * Sequencer.h
+ * Modular step sequencer for embedded synths.
+ * - Supports per-step gate, slide, note, velocity, filter.
+ * - Designed for integration with matrix scanning, MIDI, and DSP output.
+ * - Easily extensible for polyphony and parameter automation.
  */
 
 #ifndef SEQUENCER_H
 #define SEQUENCER_H
 
 #include "SequencerDefs.h"
+#include <cstdint>
 extern volatile bool trigenv1;
 extern volatile bool trigenv2;
 #include <Adafruit_TinyUSB.h>
@@ -39,6 +19,37 @@ extern volatile bool trigenv2;
 #define SEQUENCER_NUM_STEPS 16
 
 extern midi::MidiInterface<midi::SerialMIDI<Adafruit_USBD_MIDI>> usb_midi;
+
+#include <functional>
+
+// Modular envelope controller
+class EnvelopeController {
+public:
+    void trigger() { triggered = true; released = false; }
+    void release() { triggered = false; released = true; }
+    bool isTriggered() const { return triggered; }
+    bool isReleased() const { return released; }
+private:
+    bool triggered = false;
+    bool released = true;
+};
+
+// Modular note duration tracker
+class NoteDurationTracker {
+public:
+    void start(uint16_t duration) { counter = duration; active = true; }
+    void tick() { if (active && counter > 0) { --counter; if (counter == 0) active = false; } }
+    bool isActive() const { return active && counter > 0; }
+    void reset() { counter = 0; active = false; }
+private:
+    uint16_t counter = 0;
+    bool active = false;
+};
+
+struct ParameterMapping {
+    std::function<bool()> isActive;
+    std::function<void(Step&, int)> apply;
+};
 
 class Sequencer {
 public:
@@ -66,7 +77,8 @@ public:
    */
   void advanceStep(uint8_t current_uclock_step, int mm_distance,
                     bool is_button16_held, bool is_button17_held, bool is_button18_held,
-                   int current_selected_step_for_edit);
+                   int current_selected_step_for_edit,
+                   struct VoiceState* voiceState = nullptr);
 
   // Toggle step ON/OFF
   void toggleStep(uint8_t stepIdx);
@@ -102,6 +114,8 @@ private:
   bool validateState() const;
   SequencerState state;
   bool errorFlag = false;
+  EnvelopeController envelope;
+  NoteDurationTracker noteDuration;
 
   /**
    * @brief Tracks the last played MIDI note for proper noteOff handling.
@@ -117,7 +131,7 @@ public:
      * @param note MIDI note number to play.
      * @param duration Number of ticks the note should last.
      */
-    void startNote(uint8_t note, uint16_t duration);
+    void startNote(uint8_t note, uint8_t velocity,  uint16_t duration);
 
     /**
      * @brief Decrement the note duration counter. If zero, sends NoteOff and clears state.

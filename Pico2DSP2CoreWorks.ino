@@ -66,7 +66,11 @@ Melopero_VL53L1X sensor;
      // tb303. 62.5% for triplets time signature
 
 // --- Sequencer ---
-Sequencer seq;
+#include "src/sequencer/SequencerManager.h"
+#include "src/sequencer/SequencerDefs.h"
+constexpr size_t NUM_VOICES = 4;
+SequencerManager sequencerManager(NUM_VOICES);
+VoiceState voiceStates[NUM_VOICES];
 volatile uint8_t sequencer_display_page = 0; // 0 = Note Page, 1 = Gate Page
 
 // --- MIDI & Clock ---
@@ -174,23 +178,42 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
   int N = buffer->max_sample_count;
   int16_t *out = reinterpret_cast<int16_t *>(buffer->buffer->bytes);
 
+  // Example: Polyphonic mixing using voiceStates
+  for (int i = 0; i < N; ++i) {
+    float mix = 0.0f;
+    for (size_t voiceIdx = 0; voiceIdx < NUM_VOICES; ++voiceIdx) {
+      const VoiceState& vs = voiceStates[voiceIdx];
+      if (vs.gate) {
+        // Example: Use note, velocity, filter, slide for synthesis
+        float freq = daisysp::mtof(vs.note);
+        float vel = vs.velocity;
+        // TODO: Use filter and slide as needed in your synth engine
+        // For now, just sum a simple sine wave per voice
+        mix += vel * sinf(2.0f * M_PI * freq * i / SAMPLE_RATE);
+      }
+    }
+    // Simple normalization for polyphony
+    mix /= NUM_VOICES;
+    out[2*i] = out[2*i+1] = convertSampleToInt16(mix);
+  }
+}
   for (int i = 0; i < N; ++i) {
 
-     // 1. Set Oscillator Frequencies based on note1 (from sequencer)
+     // 1. Set Oscillator Frequencies based on note1 
     float osc_base_freq = daisysp::mtof(note1); // note1 is MIDI note from sequencer
     osc1.SetFreq(osc_base_freq);
     osc2.SetFreq(osc_base_freq * 1.009f); // Slight detune
-    osc3.SetFreq(osc_base_freq * 0.998f); // Slight detune
+    osc3.SetFreq(osc_base_freq *.5f); // Slight detune
+    osc4.SetFreq(osc_base_freq);
 
-    // 2. Process Amplitude Envelope (env1) based on trigenv1 (from sequencer gate)
+    // 2. Process Amplitude Envelope (env1) based on trig`4env1 (from sequencer gate)
     // current_amp_env_value will be 0.0 to 1.0
     float current_amp_env_value = env1.Process(trigenv1);
-
+ float fm = osc4.Process()*current_amp_env_value;
     // 3. Set Filter Frequency based on freq1 (from sequencer step's filter value)
     // freq1 is expected to be in Hz (e.g., 0-5000 Hz from Lidar mapping)
     // Ensure a minimum cutoff frequency.
-    float target_filter_freq = daisysp::fmax(20.f, freq1); 
-    filter.SetFreq(target_filter_freq*current_amp_env_value);  //*current_amp_env_value);
+    filter.SetFreq(90.f+freq1);  //*current_amp_env_value);
 
     // 4. Generate and sum oscillator outputs
     float osc_sum = osc1.Process() + osc2.Process() + osc3.Process();
@@ -200,9 +223,9 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
 
     // 6. Apply amplitude envelope and step velocity to the filtered signal
     // vel1 is 0.0 to 1.0 from sequencer step's velocity
-    float final_audio_signal = filtered_signal*vel1;//* (current_amp_env_value*1.1f);// * current_amp_env_value;
+    float final_audio_signal = filtered_signal;//* (current_amp_env_value*1.1f);// * current_amp_env_value;
 
-    // 7. Scale for output (0.5f was the previous scaling factor)
+    // 7. Scale for output (0.5f wa`s the previous scaling factor)
     float sumL = final_audio_signal * 0.5f;
     float sumR = final_audio_signal * 0.5f;
 
@@ -231,16 +254,16 @@ void initOscillators() {
   env2.Init(SAMPLE_RATE);
   filter.Init(SAMPLE_RATE);
   filter.SetFreq(1000.f);
-  filter.SetRes(0.6f);
+  filter.SetRes(0.99f);
   filter.SetInputDrive(2.5f);
-  filter.SetPassbandGain(0.25f);
-  env1.SetReleaseTime(.07f);
+  filter.SetPassbandGain(0.24f);
+  env1.SetReleaseTime(.081f);
   env1.SetAttackTime(0.0016f);
   env2.SetAttackTime(0.001f);
-  env1.SetDecayTime(0.05f);
+  env1.SetDecayTime(0.08f);
   env2.SetDecayTime(0.121f);
-  env1.SetSustainLevel(0.3f);
-  env2.SetSustainLevel(0.3f);
+  env1.SetSustainLevel(0.0f);
+  env2.SetSustainLevel(0.0f);
   env2.SetReleaseTime(0.03f);
 
   // Set initial waveform for all oscillators
@@ -423,21 +446,32 @@ if (!seq.isRunning()) {
  * handling.
  */
 void onStepCallback(uint32_t step) { // uClock provides the current step number
-  // Ensure the step value wraps to the sequencer's number of steps (0-15)
   uint8_t wrapped_step = static_cast<uint8_t>(step % SEQUENCER_NUM_STEPS);
 
-  //  Serial.print("[uCLOCK] onStepCallback, uClock raw step: ");
-  //  Serial.print(step); Serial.print(", wrapped step for sequencer: ");
-  //  Serial.println(wrapped_step);
-  // Advance the sequencer, passing all necessary external states
-  seq.advanceStep(wrapped_step, mm,
-                   button16Held, button17Held, button18Held,
-                  selectedStepForEdit);
-                  
+  // Advance all voices
+  for (size_t voiceIdx = 0; voiceIdx < NUM_VOICES; ++voiceIdx) {
+    sequencerManager.getVoice(voiceIdx).advanceStep(
+      wrapped_step, mm,
+      button16Held, button17Held, button18Held,
+      selectedStepForEdit,
+      &voiceStates[voiceIdx]
+    );
+  }
+
+  // Example: Gate/envelope logic for first voice (expand as needed for polyphony)
+  static bool lastGateState[NUM_VOICES][SEQUENCER_NUM_STEPS] = {{false}};
+  for (size_t voiceIdx = 0; voiceIdx < NUM_VOICES; ++voiceIdx) {
+    const Step& currentStep = sequencerManager.getVoice(voiceIdx).getStep(wrapped_step);
+    if (currentStep.gate && !lastGateState[voiceIdx][wrapped_step]) {
+      sequencerManager.getVoice(voiceIdx).triggerEnvelope();
+    } else {
+      sequencerManager.getVoice(voiceIdx).releaseEnvelope();
+    }
+    lastGateState[voiceIdx][wrapped_step] = currentStep.gate;
+  }
+
   // --- One-shot parameter record at the beginning of each step ---
   static int lastStepIndex = -1;
-  
-
 }
 
 // -----------------------------------------------------------------------------
@@ -456,7 +490,7 @@ void setupI2SAudio(audio_format_t *audioFormat, audio_i2s_config_t *i2sConfig) {
   audio_i2s_set_enabled(true);
 }
 void setup() {
-  // Initialize synthesizer components
+  // Initialize synthesizercomponets
   initOscillators();
   initEnvelopeTriggers();
 
@@ -564,33 +598,33 @@ Serial.print(" CORE1 SETUP1 ... ");
         seq.setStepNote(1, 0);
         seq.setStepNote(2, 1);
         seq.setStepNote(3, 2);
-        seq.setStepNote(4, 0);
-        seq.setStepNote(5, 1);
-        seq.setStepNote(6, 2);
-        seq.setStepNote(7, 3);
-        seq.setStepNote(8, 4);
+        seq.setStepNote(4, 4);
+        seq.setStepNote(5, 7);
+        seq.setStepNote(6, 9);
+        seq.setStepNote(7, 11);
+        seq.setStepNote(8, 14);
         seq.setStepNote(9, 5);
-        seq.setStepNote(10, 6);
-        seq.setStepNote(11, 7);
+        seq.setStepNote(10,8);
+        seq.setStepNote(11, 10);
         seq.setStepNote(12, 8);
         seq.setStepNote(13, 9);
         seq.setStepNote(14, 10);
-        seq.setStepNote(15, 11);
-        seq.setStepNote(16, 12);
-    seq.setStepVelocity(0, 0.5f);
-    seq.setStepVelocity(1, 0.5f);
+        seq.setStepNote(15, 3);
+        seq.setStepNote(16, 4);
+    seq.setStepVelocity(0, 0.9f);
+    seq.setStepVelocity(1, 0.9f);
     seq.setStepVelocity(2, 0.5f);
     seq.setStepVelocity(3, 0.5f);
-    seq.setStepVelocity(4, 0.5f);
+    seq.setStepVelocity(4, 0.9f);
     seq.setStepVelocity(5, 0.5f);
     seq.setStepVelocity(6, 0.5f);
-    seq.setStepVelocity(7, 0.5f);
+    seq.setStepVelocity(7, 0.9f);
     seq.setStepVelocity(8, 0.5f);
     seq.setStepVelocity(9, 0.5f);
     seq.setStepVelocity(10, 0.5f);
     seq.setStepVelocity(11, 0.5f);
     seq.setStepVelocity(12, 0.5f);
-    seq.setStepVelocity(13, 0.5f);
+    seq.setStepVelocity(13, 0.9f);
     seq.setStepVelocity(14, 0.5f);
     seq.setStepVelocity(15, 0.5f);
 

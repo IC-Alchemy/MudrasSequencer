@@ -1,23 +1,56 @@
-/**
- * @file Sequencer.cpp
- * @brief Implementation of the modular 16-step sequencer.
- *
- * Handles step state, playhead advance, step toggling, and note assignment.
- * Designed for integration with matrix scanning and output modules (MIDI,
- * gate).
- *
- * Usage:
- *   See Sequencer.h for interface and example.
+/*
+ * Sequencer.cpp
+ * Core logic for 16-step modular sequencer.
+ * - Manages step states, playhead, note assignment.
+ * - Integrates with MIDI and gate output modules.
+ * - Designed for embedded DSP synth environments.
  */
 
 #include "Sequencer.h"
 #include <Arduino.h>
 #include <cstdint>
 #include <stdlib.h> // for random()
-
 // Access global note1 and scale[] from main .ino
 extern volatile int note1;
 extern volatile float freq1;
+
+// ParameterMapping registry for distance sensor to step parameter mapping
+static ParameterMapping parameterMappings[] = {
+    {
+        // Note mapping (button16Held)
+        []() { return button16Held; },
+        [](Step& step, int mm) {
+            int mmNote = map(mm, 0, 1400, 0, 24);
+            if (mmNote < 0) mmNote = 0;
+            if (mmNote > 24) mmNote = 0;
+            step.note = mmNote;
+        }
+    },
+    {
+        // Velocity mapping (button17Held)
+        []() { return button17Held; },
+        [](Step& step, int mm) {
+            int mmVelocity = map(mm, 0, 1400, 0, 127);
+            if (mmVelocity < 0) mmVelocity = 0;
+            if (mmVelocity > 127) mmVelocity = 127;
+            step.velocity = mmVelocity / 127.0f;
+        }
+    },
+    {
+        // Filter mapping (button18Held)
+        []() { return button18Held; },
+        [](Step& step, int mm) {
+            int mmFiltFreq = map(mm, 0, 1400, 0, 4000);
+            if (mmFiltFreq < 0) mmFiltFreq = 0;
+            if (mmFiltFreq > 5000) mmFiltFreq = 4000;
+            step.filter = mmFiltFreq;
+        }
+    }
+    // Add more mappings here as needed
+};
+
+const size_t numParameterMappings = sizeof(parameterMappings) / sizeof(ParameterMapping);
+
 
 // Access step editing state and distance sensor reading from main .ino
 extern int selectedStepForEdit;
@@ -62,7 +95,7 @@ void Sequencer::initializeSteps() {
         state.steps[i].note = 0;
         state.steps[i].gate = true; // All gates ON
         state.steps[i].velocity = 100.0f / 127.0f; // Velocity at 100 (MIDI scale)
-        state.steps[i].filter = random(200,1000); // Filter freq at 2000 Hz (normalized)
+        state.steps[i].filter = random(200,4444); // Filter freq at 2000 Hz (normalized)
         // Serial.print("  Step "); Serial.print(i);
         // Serial.print(": ON, Note Index: "); Serial.println(state.steps[i].note);
         // Serial.print("  Step "); Serial.print(i);
@@ -115,19 +148,13 @@ void Sequencer::reset() {
 /**
  * @brief Processes the sequencer logic for the given step provided by uClock.
  *
- * Core sequencer step-advance logic:
- * - Uses the `current_uclock_step` to set the internal playhead.
- * - Track the last played note.
- * - Always send noteOff for the last note before sending noteOn for the new note.
- * - If the new step is ON, send noteOn for the current note, set oscillator frequency, and trigger the envelope.
- * - If the new step is OFF, send noteOff for the last note (if any) and release the envelope.
- * - Handle repeated notes by sending noteOff then noteOn, even if the note is the same.
- * - Modular, robust, and well-documented.
+
  * @param current_uclock_step The current step number (0-15) provided by uClock.
  */
 void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
                    bool is_button16_held, bool is_button17_held, bool is_button18_held,
-                   int current_selected_step_for_edit) {
+                   int current_selected_step_for_edit,
+                   VoiceState* voiceState) {
   // Always send NoteOff for the last note before starting a new one (monophonic)
     if (currentNote >= 0) {
         handleNoteOff();
@@ -139,57 +166,49 @@ void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
 
  // --- Auto-write distance sensor to step if no step is selected for edit and gate is high ---
  if (selectedStepForEdit == -1 && currentStep.gate) {
-     // Only record one type of data at a time, based on which record button is held
-
-         if (button16Held) {
-             int mmNote = map(mm, 0, 1400, 0, 36);
-             if (mmNote < 0) mmNote = 0;
-             if (mmNote > 36) mmNote = 36;
-             currentStep.note = mmNote;
-         }  if (button17Held) {
-             int mmVelocity = map(mm, 0, 1400, 0, 127);
-             if (mmVelocity < 0) mmVelocity = 0;
-             if (mmVelocity > 127) mmVelocity = 127;
-             currentStep.velocity = mmVelocity / 127.0f;
-         }  if (button18Held) {
-             int mmFiltFreq = map(mm, 0, 1400, 0, 4000);
-             if (mmFiltFreq < 0) mmFiltFreq = 0;
-             if (mmFiltFreq > 5000) mmFiltFreq = 4000;
-             currentStep.filter = mmFiltFreq ;
+     // Iterate over all parameter mappings and apply those whose button is active
+     for (size_t i = 0; i < numParameterMappings; ++i) {
+         if (parameterMappings[i].isActive()) {
+             parameterMappings[i].apply(currentStep, mm);
          }
-    
- 
+     }
  }
-  
 
-    if (currentStep.gate) {
-        // Clamp note index to scale size
-        uint8_t scaleIndex = (currentStep.note >= scaleSize) ? 0 : currentStep.note;
-        if (scaleIndex >= SCALE_ARRAY_SIZE) { // Defensive check
-            scaleIndex = 0;
-        }
-        int new_midi_note = MIDI_BASE_NOTE + scale[0][scaleIndex];
+   // Update per-voice state if provided
+   if (voiceState) {
+       voiceState->note = currentStep.note;
+       voiceState->velocity = currentStep.velocity;
+       voiceState->filter = currentStep.filter;
+       voiceState->gate = currentStep.gate;
+       voiceState->slide = currentStep.slide;
+   }
 
-        // Update the synth engine's target note (global variable).
-        note1 = new_midi_note;
+   if (currentStep.gate) {
+       // Clamp note index to scale size
+       uint8_t scaleIndex = (currentStep.note >= scaleSize) ? 0 : currentStep.note;
+       if (scaleIndex >= SCALE_ARRAY_SIZE) { // Defensive check
+           scaleIndex = 0;
+       }
+       int new_midi_note = MIDI_BASE_NOTE + scale[0][scaleIndex];
 
-        // Trigger the envelope. This will cause re-articulation on every gated step.
-        triggerEnvelope(); // Sets trigenv1 = true
+       // Update the synth engine's target note (global variable).
+       note1 = new_midi_note;
 
-        // Use velocity and filter from step (velocity mapped to MIDI 0-127)
-        vel1 = currentStep.velocity;
-        freq1 = currentStep.filter * 1.f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
+       // Trigger the envelope. This will cause re-articulation on every gated step.
 
-        // Start the note with a fixed duration (e.g., 24 ticks for a 16th note at 96 PPQN)
-        startNote(new_midi_note, 24);
+       // Use velocity and filter from step (velocity mapped to MIDI 0-127)
+       vel1 = currentStep.velocity;
+       freq1 = currentStep.filter * 1.f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
 
-        lastNote = new_midi_note; // Update lastNote to the currently playing MIDI note.
-    } else {
-        // Current step's gate is OFF (a rest).
-        handleNoteOff();
-        releaseEnvelope(); // Sets trigenv1 = false
-        lastNote = -1;     // No MIDI note is actively sounding from the sequencer.
-    }
+       // Start the note with a fixed duration (e.g., 24 ticks for a 16th note at 96 PPQN)
+       startNote(new_midi_note, vel1*127, 24);
+
+       lastNote = new_midi_note; // Update lastNote to the currently playing MIDI note.
+   } else {
+       // Current step's gate is OFF (a rest).
+       handleNoteOff();
+       lastNote = -1;     // No MIDI note is actively sounding from the sequencer.
+   }
 }
 /**
  * @brief Instantly play a step for real-time feedback (does not advance playhead).
@@ -214,7 +233,6 @@ void Sequencer::playStepNow(uint8_t stepIdx) {
     FiltFreq = currentStep.filter * 5000.0f; // Map filter 0.0-1.0 to 0-5000 Hz (adjust as needed)
 
     // Trigger the envelope for instant feedback
-    triggerEnvelope();
 }
 
 /**
@@ -380,33 +398,29 @@ const SequencerState& Sequencer::getState() const {
  * @param note MIDI note number to play.
  * @param duration Number of ticks the note should last.
  */
-void Sequencer::startNote(uint8_t note, uint16_t duration) {
+void Sequencer::startNote(uint8_t note, uint8_t velocity, uint16_t duration) {
     currentNote = note;
-    noteDurationCounter = duration;
+    envelope.release();
+    noteDuration.start(duration);
     // Send NoteOn (velocity hardcoded to 100 for now, channel 1)
-    usb_midi.sendNoteOn(currentNote, 100, 1);
+    // usb_midi.sendNoteOn(currentNote, velocity, 1); // (commented out for modularization)
+    envelope.trigger();
 }
 
-/**
- * @brief Decrement the note duration counter. If zero, sends NoteOff and clears state.
- */
 void Sequencer::tickNoteDuration() {
-    if (currentNote >= 0 && noteDurationCounter > 0) {
-        --noteDurationCounter;
-        if (noteDurationCounter == 0) {
+    if (currentNote >= 0 && noteDuration.isActive()) {
+        noteDuration.tick();
+        if (!noteDuration.isActive()) {
             handleNoteOff();
-            releaseEnvelope();
         }
     }
 }
 
-/**
- * @brief Sends NoteOff for the current note and clears the active note state.
- */
 void Sequencer::handleNoteOff() {
     if (currentNote >= 0) {
-        usb_midi.sendNoteOff(currentNote, 0, 1);
+        // usb_midi.sendNoteOff(currentNote, 0, 1); // (commented out for modularization)
         currentNote = -1;
-        noteDurationCounter = 0;
+        envelope.release();
+        noteDuration.reset();
     }
 }

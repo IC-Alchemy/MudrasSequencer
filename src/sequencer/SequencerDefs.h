@@ -59,3 +59,12 @@ struct SequencerState {
 };
 
 #endif // SEQUENCER_DEFS_H
+
+// VoiceState for multi-voice sequencer output
+struct VoiceState {
+    int note = 48;
+    float velocity = 0.0f;
+    float filter = 0.0f;
+    bool gate = false;
+    bool slide = false;
+};
