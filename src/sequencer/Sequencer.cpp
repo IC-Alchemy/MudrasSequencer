@@ -60,8 +60,7 @@ void Sequencer::initializeSteps() {
     state.steps[i].note = 0;
     state.steps[i].gate = true;                // All gates ON
     state.steps[i].velocity = 100.0f / 127.0f; // Velocity at 100 (MIDI scale)
-    state.steps[i].filter =
-        random(200, 3000); // Filter freq at 2000 Hz (normalized)
+    state.steps[i].filter = random(200, 3000); // Filter freq at 2000 Hz (normalized)
   }
   for (uint8_t i = seqLength; i < SEQUENCER_NUM_STEPS; ++i) {
     state.steps[i] = Step();

@@ -38,6 +38,29 @@
 // 2. CONSTANTS & GLOBALS
 // -----------------------------------------------------------------------------
 
+// --- Musical Scales ---
+int scale[5][48] = {
+    // Mixolydian
+    {0, 2, 4, 5, 7, 9, 10, 12, 14, 16, 17, 19, 21, 22, 24, 26, 28,
+     29, 31, 33, 34, 36, 38, 40, 41, 43, 45, 46, 48, 50, 52, 53, 55, 57,
+     58, 60, 62, 64, 65, 67, 69, 70, 72, 72, 72, 72, 72, 72},
+    // Minor Pentatonic (doubled)
+    {0, 0, 3, 3, 5, 5, 7, 7, 10, 10, 12, 12, 15, 15, 17, 17, 19,
+     19, 22, 22, 24, 24, 27, 29, 29, 29, 32, 32, 34, 34, 36, 36, 39, 39,
+     41, 41, 43, 43, 46, 46, 48, 48, 51, 53, 53, 53, 53, 53},
+    // Custom Scale
+    {0, 2, 3, 5, 7, 8, 10, 12, 14, 15, 17, 19, 20, 22, 24, 26,
+     27, 29, 31, 32, 34, 36, 38, 39, 41, 43, 44, 46, 48, 50, 51, 53,
+     55, 56, 58, 60, 62, 63, 65, 67, 68, 70, 72, 72, 72, 72, 72, 72},
+    // Whole Tone
+    {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32,
+     34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66,
+     68, 70, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72, 72},
+    // Chromatic
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+     17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
+     34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47}
+};
 // --- Step Selection & Pad Timing ---
 volatile int selectedStepForEdit = -1; // -1 means no step selected
  //  Distance Sensor
@@ -110,7 +133,7 @@ const long interval = 1; // ms
 
 // -----------------------------------------------------------------------------
 // 3. UTILITY FUNCTIONS
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 
 /**
  * @brief Converts a floating-point sample to int16_t with scaling, rounding,
@@ -127,7 +150,7 @@ static inline int16_t convertSampleToInt16(float sample) {
 
 float applyFilterFrequency(float targetFreq) {
   static float currentFreq = 0.0f;
-  const float smoothingAlpha = 0.1f;
+  const float smoothingAlpha = 0.02f;
 
   currentFreq =
       smoothingAlpha * targetFreq + (1.0f - smoothingAlpha) * currentFreq;
@@ -159,7 +182,7 @@ void fill_audio_buffer(audio_buffer_t *buffer) {
     // 3. Set Filter Frequency based on freq1 (from sequencer step's filter value)
     // freq1 is expected to be in Hz (e.g., 0-5000 Hz from Lidar mapping)
     // Ensure a minimum cutoff frequency.
-    float target_filter_freq =applyFilterFrequency() daisysp::fmax(20.f, freq1); 
+    float target_filter_freq =applyFilterFrequency(freq1);
     filter.SetFreq(90.f+target_filter_freq*current_amp_env_value);  //*current_amp_env_value);
 
     // 4. Generate and sum oscillator outputs
@@ -363,7 +386,8 @@ void onOutputPPQNCallback(uint32_t tick)
  * note. Preserves rests, glide (if implemented), note length, and MIDI
  * handling.
  */
-void onStepCallback(uint32_t step) { // uClock provides the current step number
+void onStepCallback(uint32_t step) {
+   // uClock provides the current step number
   uint8_t wrapped_step = static_cast<uint8_t>(step % SEQUENCER_NUM_STEPS);
 
 
@@ -425,21 +449,24 @@ void setup() {
 void setup1() {
  
  
-#if defined(ARDUINO_ARCH_MBED) && defined(ARDUINO_ARCH_RP2040)
 
-  TinyUSB_Device_Init(0);
-#endif
   usb_midi.begin(MIDI_CHANNEL_OMNI);
 
   delay(random(333));
+
+
   randomSeed(
       analogRead(A0) +
       millis()); 
+  Serial.begin(115200);
+
 
 #ifndef DEBUG
+  Serial.begin(115200);
 Serial.print(" CORE1 SETUP1 ... ");
    delay(500);
 #endif
+
   VL53L1_Error status = 0;
   Wire.begin();               
   sensor.initI2C(0x29, Wire); 
@@ -450,9 +477,6 @@ Serial.print(" CORE1 SETUP1 ... ");
   status = sensor.clearInterruptAndStartMeasurement();
 
   seq.init();
-#ifndef DEBUG
-  Serial.print(" ...Distance Sensor Initialized... ");
-#endif
 
 
   // Setup clock system
