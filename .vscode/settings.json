@@ -94,5 +94,6 @@
   "C_Cpp.default.intelliSenseMode": "gcc-arm",
   "files.associations": {
     "*.ino": "cpp"
-  }
+  },
+  "C_Cpp_Runner.msvcBatchPath": ""
 }
