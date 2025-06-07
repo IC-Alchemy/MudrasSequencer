@@ -1,4 +1,3 @@
-#include <Adafruit_NeoPixel.h>
 
 // ==========================
 //      Pico2DSP2CoreWorks
@@ -46,6 +45,9 @@
 #include "src/dsp/phasor.h"
 #include <cmath>
 #include <cstdint>
+
+#include <Adafruit_NeoPixel.h>
+
 //  #define DEBUG
 
 // --- Sequencer ---

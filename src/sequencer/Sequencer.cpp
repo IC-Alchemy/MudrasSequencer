@@ -420,7 +420,6 @@ const SequencerState& Sequencer::getState() const {
  */
 void Sequencer::startNote(uint8_t note, uint8_t velocity, uint16_t duration) {
     currentNote = note;
-    envelope.release();
     noteDuration.start(duration);
     // Send NoteOn (velocity hardcoded to 100 for now, channel 1)
     // usb_midi.sendNoteOn(currentNote, velocity, 1); // (commented out for modularization)
