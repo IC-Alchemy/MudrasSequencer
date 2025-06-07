@@ -55,7 +55,7 @@ void Sequencer::init() {
 
 void Sequencer::initializeSteps() {
 
-  for (uint8_t i = 0; i < stepLength; ++i) {
+  for (uint8_t i = 0; i < seqLength; ++i) {
     state.steps[i] = Step();
     state.steps[i].note = 0;
     state.steps[i].gate = true;                // All gates ON
@@ -63,7 +63,7 @@ void Sequencer::initializeSteps() {
     state.steps[i].filter =
         random(200, 3000); // Filter freq at 2000 Hz (normalized)
   }
-  for (uint8_t i = stepLength; i < SEQUENCER_NUM_STEPS; ++i) {
+  for (uint8_t i = seqLength; i < SEQUENCER_NUM_STEPS; ++i) {
     state.steps[i] = Step();
     state.steps[i].gate = true;
   }
@@ -119,7 +119,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
                             bool is_button18_held,
                             int current_selected_step_for_edit) {
 
-  state.playhead = current_uclock_step % stepLength;
+  state.playhead = current_uclock_step % seqLength;
   Step &currentStep = state.steps[state.playhead];
   // Always send NoteOff for the last note before starting a new one
   // (monophonic)
@@ -200,7 +200,7 @@ void Sequencer::advanceStep(uint8_t current_uclock_step, int mm_distance,
  * playhead).
  */
 void Sequencer::playStepNow(uint8_t stepIdx) {
-  if (stepIdx >= stepLength)
+  if (stepIdx >= seqLength)
     return;
   Step &currentStep = state.steps[stepIdx];
 
@@ -256,7 +256,7 @@ void Sequencer::releaseEnvelope() {
 }
 // ToggleStep
 void Sequencer::toggleStep(uint8_t stepIdx) {
-  if (stepIdx >= stepLength) {
+  if (stepIdx >= seqLength) {
     // Handle out-of-bounds index, e.g., log an error or return
     // Serial.print("[SEQ] toggleStep: Invalid step index: ");
     // Serial.println(stepIdx);
@@ -274,7 +274,7 @@ void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
   // Serial.print("[SEQ] setStepNote called for index: ");
   // Serial.print(stepIdx); Serial.print(", noteIndex: ");
   // Serial.println(noteIndex);
-  if (stepIdx >= stepLength) {
+  if (stepIdx >= seqLength) {
     // Serial.println("  - Invalid step index. Returning.");
     return;
   }
@@ -286,7 +286,7 @@ void Sequencer::setStepNote(uint8_t stepIdx, uint8_t noteIndex) {
 
 void Sequencer::setStepVelocity(uint8_t stepIdx,
                                 uint8_t velocityByte) { // velocityByte is 0-127
-  if (stepIdx >= stepLength) {
+  if (stepIdx >= seqLength) {
     return;
   }
   // Convert 0-127 byte to 0.0f-1.0f float
@@ -294,7 +294,7 @@ void Sequencer::setStepVelocity(uint8_t stepIdx,
 }
 void Sequencer::setStepFiltFreq(uint8_t stepIdx, float filter) {
 
-  if (stepIdx >= stepLength) {
+  if (stepIdx >= seqLength) {
     // Serial.println("  - Invalid step index. Returning.");
     return;
   }
@@ -308,7 +308,7 @@ void Sequencer::setStepFiltFreq(uint8_t stepIdx, float filter) {
  */
 void Sequencer::setStep(int index, bool gate, bool slide, int note,
                         float velocity, float filter) {
-  if (index < 0 || index >= stepLength) {
+  if (index < 0 || index >= seqLength) {
     // Serial.println("Sequencer::setStep: Step index out of range.");
     return;
   }
@@ -337,7 +337,7 @@ void Sequencer::setStep(int index, bool gate, bool slide, int note,
  * @brief Set full step data using a Step object.
  */
 void Sequencer::setStep(int index, const Step &stepData) {
-  if (index < 0 || index >= stepLength) {
+  if (index < 0 || index >= seqLength) {
     // Serial.println("Sequencer::setStep: Step index out of range.");
     return;
   }
@@ -365,7 +365,7 @@ void Sequencer::setStep(int index, const Step &stepData) {
  * @return Const reference to the step.
  */
 const Step &Sequencer::getStep(uint8_t stepIdx) const {
-  if (stepIdx >= stepLength)
+  if (stepIdx >= seqLength)
     stepIdx = 0;
   return state.steps[stepIdx];
 }

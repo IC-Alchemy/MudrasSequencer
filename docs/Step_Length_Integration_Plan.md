@@ -23,8 +23,8 @@ Integrate a flexible step length and note duration mechanism into the Pico2DSP2C
 
 ### 2.1. Add Step Length Parameter
 
-- Add a `stepLength` member to the `Sequencer` class (default 16, user-adjustable).
-- Use `stepLength` for playhead wrapping and step advancement.
+- Add a `seqLength` member to the `Sequencer` class (default 16, user-adjustable).
+- Use `seqLength` for playhead wrapping and step advancement.
 
 ### 2.2. Implement Note Duration Tracking
 
@@ -34,7 +34,7 @@ Integrate a flexible step length and note duration mechanism into the Pico2DSP2C
 
 ### 2.3. Modify Step Advance Logic
 
-- In `advanceStep`, use `playhead = tick % stepLength`.
+- In `advanceStep`, use `playhead = tick % seqLength`.
 - When a step is triggered, calculate its duration (considering glide).
 - Add note to stack with duration.
 - Only send NoteOn if the step is not a rest/gate-off.
@@ -58,7 +58,7 @@ flowchart TD
     subgraph Sequencer
         direction LR
         ClockTick[Clock Tick (PPQN)]
-        AdvanceStep[Advance Step (tick % stepLength)]
+        AdvanceStep[Advance Step (tick % seqLength)]
         CheckStep[Check Step (gate/rest/glide)]
         NoteStack[Note Stack: Track note, duration]
         DecrementStack[Decrement durations]
@@ -80,13 +80,13 @@ flowchart TD
 
 ### 4.1. Sequencer Class
 
-- Add `uint8_t stepLength` (default 16).
+- Add `uint8_t seqLength` (default 16).
 - Add `struct NoteStackEntry { int note; int duration; } noteStack[SIZE];`
 - Add methods for managing note stack and durations.
 
 ### 4.2. Step Advance Logic
 
-- Use `playhead = tick % stepLength`.
+- Use `playhead = tick % seqLength`.
 - On step trigger, calculate note duration (consider glide).
 - Add note to stack with duration.
 
@@ -97,7 +97,7 @@ flowchart TD
 
 ### 4.4. UI/Parameter Handling
 
-- Provide a way to set `stepLength` at runtime.
+- Provide a way to set `seqLength` at runtime.
 
 ---
 

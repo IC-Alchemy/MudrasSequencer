@@ -527,7 +527,7 @@ void doLEDStuff() {
 
     if (isPlayhead && gateOn) {
       // Gate state indication should override cyan pulse (example: white)
-      ledMatrix.setPixelColorInternal((uint8_t)selectedStepForEdit, CRGB(255, 255, 255));
+      ledMatrix.setLED((uint8_t)selectedStepForEdit % 16, (uint8_t)selectedStepForEdit / 16, CRGB(255, 255, 255));
       // Debug
       // Serial.println("[LED] Selected step is playhead and gate is ON: white.");
     } else {
@@ -537,7 +537,7 @@ void doLEDStuff() {
       uint8_t brightness = (uint8_t)(pulse * 255.0f);
 
       // Cyan: (0, brightness, brightness)
-      ledMatrix.setPixelColorInternal((uint8_t)selectedStepForEdit, CRGB(0, brightness, brightness));
+      ledMatrix.setLED((uint8_t)selectedStepForEdit % 16, (uint8_t)selectedStepForEdit / 16, CRGB(0, brightness, brightness));
       // Debug
       // Serial.println("[LED] Selected step LED pulsing cyan.");
     }
@@ -546,7 +546,7 @@ void doLEDStuff() {
     ledWasActive = true;
   } else if (ledWasActive && lastSelectedStep != -1) {
     // Turn off or restore LED when deselected
-    ledMatrix.setPixelColorInternal((uint8_t)lastSelectedStep, CRGB(0, 0, 0));
+    ledMatrix.setLED((uint8_t)lastSelectedStep % 16, (uint8_t)lastSelectedStep / 16, CRGB(0, 0, 0));
     ledWasActive = false;
     lastSelectedStep = -1;
   }

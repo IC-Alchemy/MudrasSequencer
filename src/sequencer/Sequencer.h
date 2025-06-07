@@ -109,7 +109,7 @@ private:
    */
   int8_t lastNote = -1;
 private:
-  uint8_t stepLength = SEQUENCER_NUM_STEPS; // Default 16, user-adjustable
+  uint8_t seqLength = SEQUENCER_NUM_STEPS; // Default 16, user-adjustable
 public:
     // Monophonic note duration tracking (Step 2 integration plan)
     /**
