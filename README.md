@@ -130,6 +130,14 @@ User Interface (step select, buttons) ---> Manual Editing Overrides
 
 ---
 
-This documentation summarizes the sequencer's architecture, workflow, and integration points, providing a complete picture of how input signals and user interaction drive musical output.
+; Library Licenses and Attributions
+; Please refer to the individual library repositories for full license texts and compliance requirements.
 
-For detailed API usage, refer to the header files in `src/sequencer`.
+[Libraries]
+FastLED = MIT License - https://github.com/FastLED/FastLED
+Adafruit MPR121 = BSD License - https://github.com/adafruit/Adafruit_MPR121_Library
+Adafruit SSD1306 = BSD License - https://github.com/adafruit/Adafruit_SSD1306
+Melopero VL53L1X = MIT License - https://github.com/melopero/Melopero_VL53L1X
+DaisySP = MIT License - https://github.com/electro-smith/DaisySP
+Arduino MIDI Library = MIT License - https://github.com/FortySevenEffects/arduino_midi_library
+TinyUSB = BSD License - https://github.com/hathach/tinyusb
