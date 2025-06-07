@@ -48,77 +48,8 @@ const std::vector<int> cMajorScale = {0, 2, 4, 5, 7, 9, 11, 12};
 // Centralized function to update sequencer step parameters
 void updateSequencerStep(int stepIndex, int note, int velocity, float filterFreq) {
     // Update note and velocity for the step
-    sequencer.steps[stepIndex].note = note;
-    sequencer.steps[stepIndex].velocity = velocity;
-
-    // Update filter frequency with smoothing
-    sequencer.steps[stepIndex].filterFrequency = smoothFilterFrequency(
-        sequencer.steps[stepIndex].filterFrequency, filterFreq);
-
-    // Additional step updates can be added here
-}
-
-// Example smoothing helper
-float smoothFilterFrequency(float previousFreq, float targetFreq, float alpha = 0.05f) {
-    return alpha * targetFreq + (1.0f - alpha) * previousFreq;
+    // Implement boundary checks and state updates here
 }
 ```
 
 ---
-
-## 4. Applying Filter Frequency Dynamically with Smoothing in the Synth Engine
-
-```cpp
-// Synth engine filter frequency update with smoothing
-void applyFilterFrequency(float targetFreq) {
-    static float currentFreq = 0.0f;
-    const float smoothingAlpha = 0.1f;
-
-    currentFreq = smoothingAlpha * targetFreq + (1.0f - smoothingAlpha) * currentFreq;
-
-    synthFilter.setCutoffFrequency(currentFreq);
-}
-
-// Usage in audio callback or update loop:
-// applyFilterFrequency(newFilterFreq);
-```
-
----
-
-## 5. Implementing Slide/Legato Support in the Sequencer
-
-```cpp
-// Update sequencer step with slide/legato support
-void updateStepWithSlide(int stepIndex, int newNote, bool slide) {
-    if (slide && sequencer.currentNote == newNote) {
-        // Do not retrigger envelope; continue legato
-        sequencer.legatoActive = true;
-    } else {
-        // Retrigger envelope for new note
-        sequencer.legatoActive = false;
-        sequencer.triggerEnvelope(newNote);
-    }
-    sequencer.currentNote = newNote;
-}
-```
-
----
-
-## 6. Optimized Note Off/On Handling for Repeated Notes to Prevent Artifacts
-
-```cpp
-// Handle note off/on for repeated notes without artifacts
-void handleNoteRepeat(int note) {
-    if (sequencer.currentNote == note) {
-        // Avoid retriggering note off/on if same note is repeated
-        return;
-    }
-
-    // Turn off previous note
-    sequencer.noteOff(sequencer.currentNote);
-
-    // Turn on new note
-    sequencer.noteOn(note);
-
-    sequencer.currentNote = note;
-}

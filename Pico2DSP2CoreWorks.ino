@@ -5,6 +5,25 @@
 //   Refactored & Organized
 // ==========================
 
+/**
+ * Main firmware for Pico2DSP2CoreWorks
+ *
+ * This firmware integrates core functionalities including:
+ * - Real-time audio synthesis and I2S output handling.
+ * - Sequencer control with step advancement synchronized to uClock.
+ * - Envelope triggering and release integrated with note events.
+ * - Note duration tracking for precise control of note lifecycles.
+ * - Distance sensor input for dynamic modulation of sequencer step parameters.
+ * - MIDI messaging for external device interfacing.
+ * - User interface via touch matrix for manual editing of sequence steps.
+ *
+ * The sequencer logic is primarily implemented in the `src/sequencer` directory,
+ * with this file coordinating the interaction between sensor inputs, sequencer state,
+ * audio synthesis modules, and MIDI output.
+ *
+ * Envelope triggering and note duration tracking mechanisms are managed within
+ * the sequencer module, with flags and counters controlling articulation phases.
+ */
 /*
  * Main firmware for Pico2DSP2CoreWorks
  * - Audio synthesis and output (I2S)
@@ -392,10 +411,7 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
       }
     }
 
-    // recordButtonHeld = button16Held || button17Held || button18Held ;
-    // For now, the individual button presses for 16,17,18 already set
-    // recordButtonHeld = true. The release logic needs to be careful. If any of
-    // 16,17,18 are released, we need to check if others are still held.
+ 
   }
 }
 
@@ -403,15 +419,6 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
 // 7. MIDI & CLOCK HANDLERS
 // -----------------------------------------------------------------------------
 
-void ledOn() { /* Implement as needed */ }
-void ledOff() { /* Implement as needed */ }
-
-// --- LED Matrix Control Stub ---
-// Replace this stub with your actual per-step RGB LED control implementation.
-void setStepLedColor(uint8_t step, uint8_t r, uint8_t g, uint8_t b) {
-  // Example: send color to hardware for the given step index.
-  // This is a stub for integration with your LED hardware.
-}
 
 void onSync24Callback(uint32_t tick) { usb_midi.sendRealTime(midi::Clock); }
 
