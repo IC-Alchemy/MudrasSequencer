@@ -154,20 +154,4 @@ private:
 #include <Arduino.h>
 #endif
 
-class Sequencer {
-public:
-    // Existing declarations...
-    void debugPrintStepGates() const;
-};
-
-#ifdef ARDUINO
-#include <Arduino.h>
-#endif
-
-class Sequencer {
-public:
-    // Existing declarations...
-    void debugPrintStepGates() const;
-};
-
 #endif // SEQUENCER_H
