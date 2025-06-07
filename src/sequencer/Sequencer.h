@@ -45,8 +45,8 @@ public:
   Sequencer();
 
   // Step length (number of steps in the sequence, user-adjustable, max 16)
-  uint8_t getStepLength() const { return stepLength; }
-  void setStepLength(uint8_t len) { stepLength = (len > 0 && len <= SEQUENCER_NUM_STEPS) ? len : SEQUENCER_NUM_STEPS; }
+  uint8_t getSeqLength() const { return seqLength; }
+  void setSeqLength(uint8_t len) { seqLength = (len > 0 && len <= SEQUENCER_NUM_STEPS) ? len : SEQUENCER_NUM_STEPS; }
 
   // Instantly play a step for real-time feedback (does not advance playhead)
   void playStepNow(uint8_t stepIdx);
