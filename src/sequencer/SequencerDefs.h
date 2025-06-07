@@ -33,18 +33,18 @@ constexpr uint8_t SCALE_ARRAY_SIZE = 40;
 
 // Represents a single step in the sequencer
 struct Step {
- bool gate = false;      // Gate ON (true) or OFF (false)
-  bool slide = false;     // Slide ON (true) or OFF (false)
-  int note = 0;           // Note value, 0-24
-  float velocity = 0.5f;  // Velocity, 0.0f - 1.0f (normalized)
-  float filter = 0.5f;    // Filter value, 0.0f - 1.0f (normalized)
+    bool gate = false;      // Gate ON (true) or OFF (false)
+    bool slide = false;     // Slide ON (true) or OFF (false)
+    int note = 0;           // Note value, 0-24
+    float velocity = 0.5f;  // Velocity, 0.0f - 1.0f (normalized)
+    float filter = 0.5f;    // Filter value, 0.0f - 1.0f (normalized)
 
-  // Default constructor initializes to sensible defaults
-  Step() = default;
+    // Default constructor initializes to sensible defaults
+    Step() = default;
 
-  // Parameterized constructor for convenience
-  Step(bool g, bool s, int n, float v, float f)
-      : gate(g), slide(s), note(n), velocity(v), filter(f) {}
+    // Parameterized constructor for convenience
+    Step(bool g, bool s, int n, float v, float f)
+        : gate(g), slide(s), note(n), velocity(v), filter(f) {}
 };
 
 // Playhead position (0..SEQUENCER_NUM_STEPS-1)
@@ -52,15 +52,14 @@ using Playhead = uint8_t;
 
 // Sequencer state (for future extensibility)
 struct SequencerState {
-  Step steps[SEQUENCER_NUM_STEPS];
-  Playhead playhead; // Current step index
-  bool running;      // Is the sequencer running?
-  SequencerState() : playhead(0), running(false) {}
+    Step steps[SEQUENCER_NUM_STEPS];
+    Playhead playhead; // Current step index
+    bool running;      // Is the sequencer running?
+    SequencerState() : playhead(0), running(false) {}
 };
 
-#endif // SEQUENCER_DEFS_H
-
 // VoiceState for multi-voice sequencer output
+#pragma message("Including VoiceState struct definition")
 struct VoiceState {
     int note = 48;
     float velocity = 0.0f;
@@ -68,3 +67,5 @@ struct VoiceState {
     bool gate = false;
     bool slide = false;
 };
+
+#endif // SEQUENCER_DEFS_H

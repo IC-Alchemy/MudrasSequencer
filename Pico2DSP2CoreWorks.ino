@@ -1,4 +1,4 @@
-
+/// ooo
 // ==========================
 //      Pico2DSP2CoreWorks
 //   Refactored & Organized
@@ -320,8 +320,9 @@ void matrixEventHandler(const MatrixButtonEvent &evt) {
           millis() - padPressTimestamps[evt.buttonIndex];
       if (pressDuration < 400) {
         // Single tap: toggle gate state
-        seq.toggleStep(evt.buttonIndex);
-        bool gateState = seq.getStep(evt.buttonIndex).gate;
+        // For multi-voice, toggle step on first voice (voice 0) as example
+        sequencerManager.getVoice(0).toggleStep(evt.buttonIndex);
+        bool gateState = sequencerManager.getVoice(0).getStep(evt.buttonIndex).gate;
         Serial.print("[MATRIX] Step ");
         Serial.print(evt.buttonIndex);
         Serial.print(" gate toggled (single tap). New gate value: ");
@@ -427,13 +428,19 @@ void onSync24Callback(uint32_t tick) { usb_midi.sendRealTime(midi::Clock); }
 void onClockStart() {
   Serial.println("[uCLOCK] onClockStart() called.");
   usb_midi.sendRealTime(midi::Start); // MIDI Start message
-  seq.start();
+  // Start all voices
+  for (size_t i = 0; i < sequencerManager.getNumVoices(); ++i) {
+    sequencerManager.getVoice(i).start();
+  }
 }
 
 void onClockStop() {
   Serial.println("[uCLOCK] onClockStop() called.");
   usb_midi.sendRealTime(midi::Stop); // MIDI Stop message
-  seq.stop();
+  // Stop all voices
+  for (size_t i = 0; i < sequencerManager.getNumVoices(); ++i) {
+    sequencerManager.getVoice(i).stop();
+  }
 }
 void onOutputPPQNCallback(uint32_t tick) {
   // Tick note duration and handle note off for each voice
@@ -443,10 +450,18 @@ void onOutputPPQNCallback(uint32_t tick) {
 }
 
 void seqStoppedMode() {
-  if (!seq.isRunning()) {
+  // Check if any voice is running
+  bool anyRunning = false;
+  for (size_t i = 0; i < sequencerManager.getNumVoices(); ++i) {
+    if (sequencerManager.getVoice(i).isRunning()) {
+      anyRunning = true;
+      break;
+    }
+  }
+  if (!anyRunning) {
+
   }
 }
-
 /**
  * Monophonic step callback: handles rest, note length, and MIDI for a single
  * note. Preserves rests, glide (if implemented), note length, and MIDI
@@ -555,7 +570,10 @@ void setup1() {
   status = sensor.setInterMeasurementPeriodMilliSeconds(30);
   status = sensor.clearInterruptAndStartMeasurement();
 
-  seq.init();
+  // Initialize all voices
+  for (size_t i = 0; i < sequencerManager.getNumVoices(); ++i) {
+    sequencerManager.getVoice(i).init();
+  }
 #ifndef DEBUG
   Serial.print(" ...Distance Sensor Initialized... ");
 #endif
@@ -626,9 +644,10 @@ void doLEDStuff() {
 
   if (selectedStepForEdit != -1) {
     // Check if selected step is currently playing and gate is ON
-    bool isPlayhead = (seq.getState().playhead == selectedStepForEdit);
-    bool gateOn = seq.getStep(selectedStepForEdit).gate;
-
+    // Check first voice as example
+    bool isPlayhead = (sequencerManager.getVoice(0).getState().playhead == selectedStepForEdit);
+    bool gateOn = sequencerManager.getVoice(0).getStep(selectedStepForEdit).gate;
+  
     if (isPlayhead && gateOn) {
       // Gate state indication should override cyan pulse (example: white)
       setStepLedColor((uint8_t)selectedStepForEdit, 255, 255, 255);
@@ -644,7 +663,7 @@ void doLEDStuff() {
       // Cyan: (0, brightness, brightness)
       setStepLedColor((uint8_t)selectedStepForEdit, 0, brightness, brightness);
       // Debug
-      // Serial.println("[LED] Selected step LED pulsing cyan.");
+      // Serial.println("[LED] Selected step LED pulsing cya.");
     }
 
     lastSelectedStep = selectedStepForEdit;
