@@ -40,15 +40,14 @@ This module manages a 32-button capacitive touch matrix using a single MPR121 se
 
 
 
+; Library Licenses and Attributions
+; Please refer to the individual library repositories for full license texts and compliance requirements.
 
-License and Acknowledgements
-This project uses several open-source libraries. Please see their respective licenses for details:
-
-FastLED — MIT License — https://github.com/FastLED/FastLED
-Adafruit MPR121 — BSD License — https://github.com/adafruit/Adafruit_MPR121_Library
-Adafruit SSD1306 — BSD License — https://github.com/adafruit/Adafruit_SSD1306
-Melopero VL53L1X — MIT License — https://github.com/melopero/Melopero_VL53L1X
-DaisySP — MIT License — https://github.com/electro-smith/DaisySP
-Arduino MIDI Library — MIT License — https://github.com/FortySevenEffects/arduino_midi_library
-TinyUSB — BSD License — https://github.com/hathach/tinyusb
-Please refer to the individual library repositories for full license texts and compliance requirements.
+[Libraries]
+FastLED = MIT License - https://github.com/FastLED/FastLED
+Adafruit MPR121 = BSD License - https://github.com/adafruit/Adafruit_MPR121_Library
+Adafruit SSD1306 = BSD License - https://github.com/adafruit/Adafruit_SSD1306
+Melopero VL53L1X = MIT License - https://github.com/melopero/Melopero_VL53L1X
+DaisySP = MIT License - https://github.com/electro-smith/DaisySP
+Arduino MIDI Library = MIT License - https://github.com/FortySevenEffects/arduino_midi_library
+TinyUSB = BSD License - https://github.com/hathach/tinyusb
